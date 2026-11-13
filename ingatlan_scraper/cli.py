@@ -53,6 +53,33 @@ def cmd_status() -> None:
         print(f"{portal_name}: pending={counts.get('pending', 0)} downloaded={counts.get('downloaded', 0)} error={counts.get('error', 0)}")
 
 
+def build_batch(records: dict, pending_urls: list[str], count: int) -> list[str]:
+    """Letöltési sorrend összeállítása úgy, hogy ugyanazon portál linkjei
+    ne kövessék egymást közvetlenül (portálonkénti körbeforgatás)."""
+    by_portal: dict[str, list[str]] = {}
+    for url in pending_urls:
+        by_portal.setdefault(records[url].portal, []).append(url)
+    for urls in by_portal.values():
+        random.shuffle(urls)
+
+    batch: list[str] = []
+    last_portal = None
+    while len(batch) < count and any(by_portal.values()):
+        portal_names = [name for name, urls in by_portal.items() if urls]
+        random.shuffle(portal_names)
+        # ha van más portál is, kerüljük az előző kör utolsó portálját
+        if last_portal in portal_names and len(portal_names) > 1:
+            portal_names.remove(last_portal)
+            portal_names.append(last_portal)
+        for portal_name in portal_names:
+            if len(batch) >= count:
+                break
+            urls = by_portal[portal_name]
+            batch.append(urls.pop())
+            last_portal = portal_name
+    return batch
+
+
 def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
     store = LinkStore(CSV_PATH)
     records = store.load()
@@ -68,8 +95,7 @@ def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
         store.save(records)
         return
 
-    random.shuffle(pending_urls)
-    batch = pending_urls[:count]
+    batch = build_batch(records, pending_urls, count)
 
     new_links_found = 0
     for i, url in enumerate(batch):
