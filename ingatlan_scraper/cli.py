@@ -52,8 +52,38 @@ def cmd_status() -> None:
     for record in records.values():
         counts = per_portal.setdefault(record.portal, {"pending": 0, "downloaded": 0, "error": 0})
         counts[record.status] = counts.get(record.status, 0) + 1
+
+    headers = ["Portál", "Pending", "Downloaded", "Error", "Összesen"]
+    rows = []
+    totals = {"pending": 0, "downloaded": 0, "error": 0}
     for portal_name, counts in per_portal.items():
-        print(f"{portal_name}: pending={counts.get('pending', 0)} downloaded={counts.get('downloaded', 0)} error={counts.get('error', 0)}")
+        pending = counts.get("pending", 0)
+        downloaded = counts.get("downloaded", 0)
+        error = counts.get("error", 0)
+        totals["pending"] += pending
+        totals["downloaded"] += downloaded
+        totals["error"] += error
+        rows.append([portal_name, str(pending), str(downloaded), str(error), str(pending + downloaded + error)])
+    rows.append([
+        "Összesen",
+        str(totals["pending"]),
+        str(totals["downloaded"]),
+        str(totals["error"]),
+        str(sum(totals.values())),
+    ])
+
+    widths = [max(len(headers[i]), *(len(row[i]) for row in rows)) for i in range(len(headers))]
+    separator = "-+-".join("-" * w for w in widths)
+
+    def format_row(cells: list[str]) -> str:
+        return " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells))
+
+    print(format_row(headers))
+    print(separator)
+    for row in rows[:-1]:
+        print(format_row(row))
+    print(separator)
+    print(format_row(rows[-1]))
 
 
 def build_batch(records: dict, pending_urls: list[str], count: int) -> list[str]:
