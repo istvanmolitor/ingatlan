@@ -4,6 +4,7 @@ import re
 from abc import ABC, abstractmethod
 from urllib.parse import urlparse
 
+from .. import downloader
 from ..models import Property
 
 
@@ -18,6 +19,16 @@ class Portal(ABC):
 
     def belongs_to(self, url: str) -> bool:
         return self.domain in urlparse(url).netloc
+
+    def fetch_html(self, url: str) -> str:
+        """Letölti egy linkhez tartozó tartalmat.
+
+        Alapesetben egy sima GET kérés (lásd `downloader.fetch_html`). Azok a
+        portálok, amelyek a hirdetéseket (vagy a listázó oldalakat) csak egy
+        JSON API-n keresztül szolgáltatják ki (pl. POST kéréssel), itt
+        felülírhatják a letöltés módját.
+        """
+        return downloader.fetch_html(url)
 
     @abstractmethod
     def extract_property_links(self, html: str, base_url: str) -> set[str]:

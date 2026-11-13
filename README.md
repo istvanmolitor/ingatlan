@@ -89,10 +89,16 @@ data/
 
 1. Új fájl a `ingatlan_scraper/portals/` alá, benne egy `Portal` alosztály:
    - `name`, `domain`, `seed_urls`
-   - `link_pattern`: regex, amivel a hirdetés-részletező linkeket lehet
-     felismerni a listázó oldalak HTML-jében
+   - `extract_property_links(html, base_url) -> set[str]`: hogyan lehet a
+     letöltött (listázó vagy hirdetés-) oldalból kinyerni a hirdetés-
+     részletező linkeket
    - `parse_property(html, url) -> Property | None`: a letöltött
-     hirdetés-HTML-ből hogyan épül fel az egységes `Property` DTO
+     hirdetés-tartalomból hogyan épül fel az egységes `Property` DTO
+   - ha a portál a hirdetéseket (vagy a listázó oldalakat) csak egy JSON
+     API-n keresztül szolgáltatja ki (pl. POST kéréssel, mert a weboldal
+     kliensoldalon – Angular/React – épül fel), a `fetch_html(url)` metódus
+     felülírható, hogy a sima GET helyett a megfelelő API-hívást végezze el
+     (lásd `DhHuPortal` / `ZengaHuPortal`)
 2. Felvenni az új osztály példányát az `ALL_PORTALS` listába
    (`ingatlan_scraper/portals/__init__.py`).
 
@@ -106,6 +112,29 @@ feltételezésen alapul (nem volt tesztelhető valódi letöltött HTML-en) — 
 sikerül valódi hirdetés-HTML-hez hozzáférni, a mezőneveket a
 `ingatlan_scraper/portals/ingatlan_com.py`-ban kell majd pontosítani.
 
-Az **oc.hu** portál működik: a hirdetés-részletező oldalakba ágyazott Google
-Tag Manager `dataLayer.push({... "event":"view_item" ...})` hívásból nyeri ki
-az adatokat (`ingatlan_scraper/gtm.py`).
+## Támogatott portálok
+
+- **oc.hu**: a hirdetés-részletező oldalakba ágyazott Google Tag Manager
+  `dataLayer.push({... "event":"view_item" ...})` hívásból nyeri ki az
+  adatokat (`ingatlan_scraper/gtm.py`).
+- **jofogas.hu** (`ingatlan.jofogas.hu`): sima szerveroldali HTML, a
+  hirdetés-részletező oldalak egy schema.org `Product` JSON-LD blokkot
+  tartalmaznak (`ingatlan_scraper/portals/jofogas_hu.py`).
+- **ingatlanbazar.hu**: a weboldal kliensoldali (Angular) SPA, de a
+  hirdetéseket egy nyilvános, sima GET-tel elérhető JSON API szolgáltatja ki
+  (`/api/property-search`, `/api/property/<id>`), ezt használjuk HTML
+  letöltés helyett.
+- **dh.hu** (korábban/márkanév szerint "Duna House" — a `duna-house.hu`
+  domain nem létezik): szintén Angular SPA, a saját JSON API-ját
+  (`newdhapi03.dh.hu`) hívjuk a `Portal.fetch_html` felülírásával (a
+  listázáshoz POST, a hirdetés-részletezőhöz GET kérés szükséges).
+- **zenga.hu** (az **ingatlan.net** domain 2026-ban ide irányít át):
+  ugyanígy SPA, a saját JSON API-ját (`/api/rels/v1/adverts/...`) hívjuk,
+  a kereséshez POST-tal, a hirdetés-részletezőhöz GET-tel.
+
+Mivel az ingatlanbazar.hu, a dh.hu és a zenga.hu mögötti JSON API-k nem
+publikus, dokumentált API-k, hanem a weboldal saját, reverse-engineeringelt
+belső végpontjai, bármikor változhatnak — ha egy ilyen portál hirtelen leáll
+(`error` státuszú linkek halmozódnak, vagy a `parse` sok mindent kihagy),
+érdemes friss böngésző-hálózati naplóval (DevTools → Network) ellenőrizni,
+hogy a végpont vagy a válasz formátuma nem változott-e.

@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .csv_store import LinkRecord, LinkStore, PropertyStore
-from .downloader import fetch_html
 from .portals import ALL_PORTALS, PORTALS_BY_NAME, find_portal_for_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -82,7 +81,7 @@ def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
 
         print(f"Letöltés ({i + 1}/{len(batch)}): {url}")
         try:
-            html = fetch_html(url)
+            html = portal.fetch_html(url)
         except Exception as exc:  # noqa: BLE001 - egy sikertelen letöltés ne állítsa meg a futást
             print(f"  Hiba letöltés közben: {exc}")
             record.status = "error"

@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+import json
+import re
+from html import unescape
+from urllib.parse import parse_qs, urljoin
+
+from ..html_links import extract_hrefs
+from ..models import Property
+from .base import Portal
+
+# hirdetés URL-ek formátuma: ingatlan.jofogas.hu/<megye>/<cim>_<szamazonosito>.htm
+_PROPERTY_LINK_RE = re.compile(r"ingatlan\.jofogas\.hu/[a-z_]+/[^/\"?]+_\d+\.htm", re.IGNORECASE)
+
+# A hirdetés-részletező oldalak egy "page-jsonld" script-tagben hordozzák a
+# hirdetés adatait schema.org Product/BreadcrumbList formátumban.
+_JSONLD_RE = re.compile(r'<script id="page-jsonld" type="application/ld\+json">(.*?)</script>', re.S)
+
+# A "customtarget" meta tag "debug" attribútuma tartalmazza a hirdetés
+# tranzakciótípusát (type=s: eladás, type=u: bérlet/kiadás).
+_CUSTOMTARGET_RE = re.compile(r'name="customtarget" debug="([^"]*)"')
+
+
+class JofogasHuPortal(Portal):
+    name = "jofogas.hu"
+    domain = "jofogas.hu"
+    seed_urls = [
+        "https://ingatlan.jofogas.hu/magyarorszag/ingatlan",
+    ]
+
+    def extract_property_links(self, html: str, base_url: str) -> set[str]:
+        links = set()
+        for href in extract_hrefs(html):
+            absolute = urljoin(base_url, href)
+            if self.belongs_to(absolute) and _PROPERTY_LINK_RE.search(absolute):
+                links.add(self._normalize(absolute))
+        return links
+
+    def parse_property(self, html: str, url: str) -> Property | None:
+        target_match = _CUSTOMTARGET_RE.search(html)
+        if target_match:
+            params = parse_qs(unescape(target_match.group(1)))
+            if params.get("type", [""])[0] == "u":
+                return None  # bérlet/kiadás hirdetés
+
+        jsonld_match = _JSONLD_RE.search(html)
+        if jsonld_match is None:
+            return None
+        try:
+            data = json.loads(jsonld_match.group(1))
+        except json.JSONDecodeError:
+            return None
+
+        graph = data.get("@graph") or []
+        product = next((node for node in graph if node.get("@type") == "Product"), None)
+        if product is None:
+            return None
+
+        breadcrumb = next((node for node in graph if node.get("@type") == "BreadcrumbList"), None)
+        location = ""
+        if breadcrumb is not None:
+            # az első két elem mindig "Jófogás" és "Ingatlan", azokat kihagyjuk
+            names = [item["name"] for item in breadcrumb.get("itemListElement", [])[2:]]
+            location = ", ".join(names)
+
+        size = next(
+            (prop.get("value", "") for prop in product.get("additionalProperty", []) if prop.get("name") == "Méret"),
+            "",
+        )
+        rooms = next(
+            (prop.get("value", "") for prop in product.get("additionalProperty", []) if prop.get("name") == "Szobák száma"),
+            "",
+        )
+        offers = product.get("offers") or {}
+
+        return Property(
+            url=url,
+            portal=self.name,
+            property_id=str(product.get("sku", "")),
+            property_type=str(product.get("category", "")),
+            title=str(product.get("name", "")),
+            price=str(offers.get("price", "")),
+            currency=str(offers.get("priceCurrency", "")),
+            area_sqm=size,
+            rooms=rooms,
+            location=location,
+        )
