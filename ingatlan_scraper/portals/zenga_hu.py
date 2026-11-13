@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urlparse
 import requests
 
 from ..downloader import USER_AGENT
-from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_property_type, parse_area_sqm, parse_rooms
 from .base import Portal
 
 _SEARCH_PATH = "/api/rels/v1/adverts/search"
@@ -89,11 +89,11 @@ class ZengaHuPortal(Portal):
             url=url,
             portal=self.name,
             property_id=str(data.get("advertId", "")),
-            property_type=str(data.get("propertyCategory", "")),
+            property_type=normalize_property_type(data.get("propertyCategory")),
             title=str(data.get("advertTitle", "")),
             price=str(data.get("price", "")),
             currency=str(data.get("currency", "")),
-            area_sqm=str(data.get("floorAreaSize", "")),
-            rooms=str(data.get("numberOfRooms", "")),
+            area_sqm=parse_area_sqm(data.get("floorAreaSize")),
+            rooms=parse_rooms(data.get("numberOfRooms")),
             location=str(data.get("address", "")),
         )

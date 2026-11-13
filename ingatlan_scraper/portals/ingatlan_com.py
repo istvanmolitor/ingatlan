@@ -3,7 +3,7 @@ from urllib.parse import urljoin
 
 from ..gtm import find_ecommerce_item
 from ..html_links import extract_hrefs
-from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_property_type, parse_area_sqm
 from .base import Portal
 
 # hirdetés URL-ek numerikus azonosítóval záródnak, pl. .../33069975
@@ -58,10 +58,10 @@ class IngatlanComPortal(Portal):
             url=url,
             portal=self.name,
             property_id=pick("item_id", "id", "ad_id"),
-            property_type=pick("real_estate_type", "property_type", "category"),
+            property_type=normalize_property_type(pick("real_estate_type", "property_type", "category")),
             title=pick("item_name", "name", "title"),
             price=pick("price", "value"),
             currency=pick("currency", default="HUF"),
-            area_sqm=pick("size", "area", "living_area"),
+            area_sqm=parse_area_sqm(pick("size", "area", "living_area")),
             location=pick("location_city", "city", "settlement"),
         )

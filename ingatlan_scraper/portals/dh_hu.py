@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from ..downloader import USER_AGENT
-from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_property_type, parse_area_sqm, parse_rooms
 from .base import Portal
 
 _API_BASE = "https://newdhapi03.dh.hu/api"
@@ -93,11 +93,11 @@ class DhHuPortal(Portal):
             url=url,
             portal=self.name,
             property_id=str(result.get("referenceNumber", "")),
-            property_type=str(result.get("propertyTypeName", "")),
+            property_type=normalize_property_type(result.get("propertyTypeName")),
             title=str(result.get("address", "")),
             price=str(result.get("priceNumeric", "")),
             currency=str(result.get("priceOriginalCurrency", "")),
-            area_sqm=str(result.get("area", "")),
-            rooms=str(result.get("rooms", "")),
+            area_sqm=parse_area_sqm(result.get("area")),
+            rooms=parse_rooms(result.get("rooms")),
             location=str(result.get("address", "")),
         )

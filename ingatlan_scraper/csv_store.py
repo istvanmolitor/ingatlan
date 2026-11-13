@@ -4,7 +4,7 @@ import csv
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .models import PROPERTY_FIELDNAMES, Property
+from .models import PROPERTY_FIELDNAMES, Property, normalize_property_type, parse_area_sqm, parse_rooms
 
 FIELDNAMES = ["url", "portal", "status", "page_type", "discovered_at", "downloaded_at", "file_path"]
 
@@ -64,7 +64,17 @@ class PropertyStore:
             return {}
         with self.csv_path.open(newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
-            return {row["url"]: Property(**row) for row in reader}
+            return {
+                row["url"]: Property(
+                    **{
+                        **row,
+                        "area_sqm": parse_area_sqm(row.get("area_sqm")),
+                        "property_type": normalize_property_type(row.get("property_type")),
+                        "rooms": parse_rooms(row.get("rooms")),
+                    }
+                )
+                for row in reader
+            }
 
     def save(self, properties: dict[str, Property]) -> None:
         self.csv_path.parent.mkdir(parents=True, exist_ok=True)

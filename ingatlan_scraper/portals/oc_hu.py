@@ -3,7 +3,7 @@ from urllib.parse import urljoin
 
 from ..gtm import find_ecommerce_item
 from ..html_links import extract_hrefs
-from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_property_type, parse_area_sqm
 from .base import Portal
 
 # hirdetés URL-ek formátuma: /ingatlanok/H123456 vagy /ingatlanok/NY123456
@@ -60,10 +60,10 @@ class OcHuPortal(Portal):
             url=url,
             portal=self.name,
             property_id=str(item.get("item_id", "")),
-            property_type=str(item.get("real_estate_type", "")),
+            property_type=normalize_property_type(item.get("real_estate_type")),
             title=str(item.get("item_name", "")),
             price=str(item.get("price", "")),
             currency=str(item.get("currency", "")),
-            area_sqm=str(item.get("size", "")),
+            area_sqm=parse_area_sqm(item.get("size")),
             location=location,
         )
