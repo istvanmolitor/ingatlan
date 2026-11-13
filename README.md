@@ -22,6 +22,8 @@ python3 -m ingatlan_scraper fetch --count 3
 python3 -m ingatlan_scraper status
 python3 -m ingatlan_scraper parse
 python3 -m ingatlan_scraper show_data
+python3 -m ingatlan_scraper export [output.zip]
+python3 -m ingatlan_scraper import <input.zip>
 ```
 
 ### `seed`
@@ -72,6 +74,36 @@ duplikál).
 
 Betölti a `data/properties.csv`-t `pandas` DataFrame-ként, és táblázatos
 formában kiírja a már feldolgozott ingatlanadatokat.
+
+### `export`
+
+```
+python3 -m ingatlan_scraper export backup.zip
+```
+
+Egy zip fájlba csomagolja a `data/links.csv`-t és az összes letöltött
+`data/html/**/*.html` fájlt (a zipen belül `links.csv` + `html/<portál>/<hash>.html`
+szerkezetben). Ha nem adsz meg kimeneti fájlnevet, `export.zip`-be ment.
+
+### `import`
+
+```
+python3 -m ingatlan_scraper import backup.zip
+```
+
+Egy korábban `export`-tal létrehozott zip tartalmát (HTML fájlok + `links.csv`)
+összefésüli a jelenlegi adatokkal:
+
+- az eddig ismeretlen linkeket felveszi a `data/links.csv`-be, a hozzájuk
+  tartozó HTML fájlt pedig átmásolja a megfelelő helyre;
+- ha egy link már szerepel a CSV-ben, de csak `pending`/`error` státuszban,
+  az importból érkező `downloaded` állapot és HTML fájl felülírja/pótolja;
+- egyébként a meglévő rekord marad, nem keletkezik duplikátum.
+
+Mivel a linkek URL szerint kulcsolt rekordok, a `data/links.csv` import után
+is garantáltan csak egyszer tartalmaz egy-egy linket. Ez teszi lehetővé, hogy
+több helyen (pl. több gépen) külön-külön letöltött adagokat utólag egy közös
+adatbázisba lehessen összefésülni.
 
 ## Adatok
 

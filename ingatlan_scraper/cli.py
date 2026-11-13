@@ -3,8 +3,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import random
+import shutil
 import sys
+import tempfile
 import time
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -183,6 +186,97 @@ def cmd_show_data() -> None:
     print(df)
 
 
+def cmd_export(output_path: Path) -> None:
+    output_path = output_path.resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    html_count = 0
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        if CSV_PATH.exists():
+            zf.write(CSV_PATH, arcname="links.csv")
+        if HTML_DIR.exists():
+            for html_path in sorted(HTML_DIR.rglob("*.html")):
+                arcname = str(Path("html") / html_path.relative_to(HTML_DIR))
+                zf.write(html_path, arcname=arcname)
+                html_count += 1
+    print(f"Export kész: {output_path} (links.csv + {html_count} HTML fájl)")
+
+
+def _copy_imported_html(tmp_dir: Path, record: LinkRecord) -> bool:
+    """Az importált HTML fájl átmásolása a data/html alá, ha még nincs ott."""
+    if record.status != "downloaded" or not record.file_path:
+        return False
+
+    try:
+        relative = Path(record.file_path).relative_to(Path("data") / "html")
+    except ValueError:
+        return False
+
+    source = tmp_dir / "html" / relative
+    if not source.exists():
+        return False
+
+    dest = BASE_DIR / record.file_path
+    if dest.exists():
+        return False
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, dest)
+    return True
+
+
+def cmd_import(input_path: Path) -> None:
+    input_path = input_path.resolve()
+    if not input_path.exists():
+        print(f"A megadott fájl nem létezik: {input_path}")
+        return
+
+    store = LinkStore(CSV_PATH)
+    records = store.load()
+
+    added = 0
+    upgraded = 0
+    copied_files = 0
+
+    with tempfile.TemporaryDirectory() as tmp_dir_str:
+        tmp_dir = Path(tmp_dir_str)
+        with zipfile.ZipFile(input_path, "r") as zf:
+            zf.extractall(tmp_dir)
+
+        incoming_csv = tmp_dir / "links.csv"
+        if not incoming_csv.exists():
+            print("A zip nem tartalmaz links.csv fájlt.")
+            return
+
+        incoming_records = LinkStore(incoming_csv).load()
+
+        for url, incoming in incoming_records.items():
+            existing = records.get(url)
+
+            if existing is None:
+                if _copy_imported_html(tmp_dir, incoming):
+                    copied_files += 1
+                records[url] = incoming
+                added += 1
+                continue
+
+            # Egy link csak egyszer szerepelhet a CSV-ben: ha már megvan,
+            # csak akkor frissítjük, ha az import letöltött állapotot hoz,
+            # a meglévő viszont még nem az.
+            if existing.status != "downloaded" and incoming.status == "downloaded":
+                if _copy_imported_html(tmp_dir, incoming):
+                    copied_files += 1
+                existing.status = incoming.status
+                existing.downloaded_at = incoming.downloaded_at
+                existing.file_path = incoming.file_path
+                upgraded += 1
+
+    store.save(records)
+    print(
+        f"Import kész. Új link: {added}, letöltöttre frissített link: {upgraded}, "
+        f"átmásolt HTML fájl: {copied_files} (összesen a CSV-ben: {len(records)})"
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="ingatlan-scraper",
@@ -203,6 +297,12 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("show_data", help="A már feldolgozott ingatlanadatok (data/properties.csv) megjelenítése pandas táblázatként")
 
+    export_parser = sub.add_parser("export", help="A links.csv és a letöltött HTML fájlok exportálása egy zip fájlba")
+    export_parser.add_argument("output", type=Path, nargs="?", default=Path("export.zip"), help="A létrehozandó zip fájl elérési útja (alapértelmezett: export.zip)")
+
+    import_parser = sub.add_parser("import", help="Korábban exportált zip (links.csv + HTML fájlok) összefésülése a meglévő adatokkal")
+    import_parser.add_argument("input", type=Path, help="A beimportálandó zip fájl elérési útja")
+
     args = parser.parse_args(argv)
 
     if args.command == "seed":
@@ -215,6 +315,10 @@ def main(argv: list[str] | None = None) -> None:
         cmd_parse()
     elif args.command == "show_data":
         cmd_show_data()
+    elif args.command == "export":
+        cmd_export(args.output)
+    elif args.command == "import":
+        cmd_import(args.input)
 
 
 if __name__ == "__main__":
