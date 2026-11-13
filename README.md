@@ -21,6 +21,7 @@ python3 -m ingatlan_scraper seed
 python3 -m ingatlan_scraper fetch --count 3
 python3 -m ingatlan_scraper status
 python3 -m ingatlan_scraper parse
+python3 -m ingatlan_scraper geocode
 python3 -m ingatlan_scraper show_data
 python3 -m ingatlan_scraper export [output.zip]
 python3 -m ingatlan_scraper import <input.zip>
@@ -67,8 +68,52 @@ portálonkénti logika szerint egységes `Property` DTO-vá alakítja őket
 írja. Ha egy letöltött HTML nem hirdetés-részletező oldal (pl. egy
 listázó/kereső oldal volt), azt kihagyja.
 
+A `location` mezőt egyúttal GPS koordinátává is alakítja (lásd `geocode`
+lejjebb) egy lokálisan futó Nominatim API-n keresztül, és a `lat`/`lon`
+mezőket is kitölti. Ha a geocoding API nem érhető el, az adott hirdetés
+koordináta nélkül kerül be, de a `parse` ettől nem áll meg — újrafuttatva
+(vagy a `geocode` paranccsal) utólag is pótolható.
+
 Újra futtatva a már feldolgozott hirdetéseket frissíti (URL alapján nem
 duplikál).
+
+### `geocode`
+
+```
+python3 -m ingatlan_scraper geocode
+```
+
+A `parse` parancs már automatikusan geocode-olja az új hirdetéseket, ez a
+parancs arra való, hogy utólag pótolja azokat a koordinátákat, amik valamiért
+(pl. a geocoding API nem volt elérhető a `parse` futásakor) még hiányoznak a
+`data/properties.csv`-ből. Végigmegy a már feldolgozott hirdetéseken, és
+akinek még nincs GPS koordinátája (`lat`/`lon` oszlop), annak a `location`
+mezőjét egy lokálisan futó [Nominatim](https://nominatim.org/) API-n keresztül
+(lásd lejjebb) GPS koordinátává alakítja. A lekérdezett címeket a
+`data/geocode_cache.csv`-ben gyorsítótárazza (a sikerteleneket is), így egy
+címet csak egyszer kérdez le.
+
+- `--delay`: várakozás (mp) két, nem cache-elt lekérdezés között
+  (alapértelmezett: 0 — lokális szerver esetén nincs szükség korlátozásra)
+- a Nominatim API címe a `NOMINATIM_URL` környezeti változóval írható felül
+  (alapértelmezett: `http://localhost:8080/search`)
+
+#### Lokális Nominatim szerver indítása
+
+A nyilvános `nominatim.openstreetmap.org` helyett (ami max. 1 kérés/mp-re
+korlátoz) érdemes lokálisan futtatni egy saját Nominatim szervert, csak
+Magyarország OSM adataival (ez elég a hazai portálok címeihez, és nem kell a
+teljes bolygót importálni):
+
+```
+docker compose up -d
+```
+
+Ez az első indításkor letölti és importálja Magyarország OSM extractját
+(`docker-compose.yml`), ami néhány GB helyet és 10-30 percet vehet igénybe.
+Az import végén a `http://localhost:8080` alatt elérhető a saját, korlátlanul
+hívható geocoding API. Az importált adatok a `nominatim-data` docker volume-ban
+maradnak meg, így a konténer újraindításakor nem kell újraimportálni.
 
 ### `show_data`
 
@@ -111,7 +156,9 @@ adatbázisba lehessen összefésülni.
 data/
   links.csv      # url, portal, status, discovered_at, downloaded_at, file_path
   properties.csv # url, portal, property_id, property_type, title, price,
-                 # currency, area_sqm, rooms, location, parsed_at, source_file
+                 # currency, area_sqm, rooms, location, lat, lon, parsed_at,
+                 # source_file
+  geocode_cache.csv # address, lat, lon (a geocode parancs gyorsítótára)
   html/
     ingatlan_com/<hash>.html
     oc_hu/<hash>.html

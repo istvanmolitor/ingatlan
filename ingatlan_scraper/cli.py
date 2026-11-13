@@ -19,6 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 CSV_PATH = DATA_DIR / "links.csv"
 PROPERTIES_CSV_PATH = DATA_DIR / "properties.csv"
+GEOCODE_CACHE_CSV_PATH = DATA_DIR / "geocode_cache.csv"
 HTML_DIR = DATA_DIR / "html"
 
 
@@ -182,14 +183,59 @@ def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
     print(f"Kész. Újonnan talált link: {new_links_found}")
 
 
+def _geocode_location(location: str, cache: dict[str, tuple[str, str]]) -> tuple[str, str, str]:
+    """Egy location mező GPS koordinátává alakítása, gyorsítótárral.
+
+    Visszaadja a (lat, lon, forrás) hármast, ahol a forrás "cache", "new"
+    vagy "failed" (cím nem található). A geocoding API hibáját (pl. nem fut
+    a lokális szerver) nem itt kezeljük, hanem a hívó oldalon.
+    """
+    if location in cache:
+        lat, lon = cache[location]
+        return lat, lon, "cache"
+
+    from .geocode import geocode
+
+    result = geocode(location)
+    if result is None:
+        cache[location] = ("", "")
+        return "", "", "failed"
+
+    lat, lon = str(result[0]), str(result[1])
+    cache[location] = (lat, lon)
+    return lat, lon, "new"
+
+
+def _try_geocode_location(location: str, cache: dict[str, tuple[str, str]]) -> tuple[str, str, str]:
+    """_geocode_location hívása úgy, hogy ha a geocoding API egyáltalán nem
+    érhető el (pl. a lokális Nominatim szerver nincs elindítva), azt egyetlen
+    üzenettel jelezzük, és a hívó ezt a futás hátralévő részében kihagyhatja
+    — így egy leállt szerver nem spammel ki egy hibát minden egyes
+    hirdetésre."""
+    import requests
+
+    try:
+        return _geocode_location(location, cache)
+    except requests.exceptions.RequestException as exc:
+        print(f"  A geocoding API nem érhető el ({exc}), a geocode-olás kihagyva ebben a futásban.")
+        return "", "", "unavailable"
+
+
 def cmd_parse() -> None:
+    from .geocode import GeocodeCache
+
     link_store = LinkStore(CSV_PATH)
     records = link_store.load()
     property_store = PropertyStore(PROPERTIES_CSV_PATH)
     properties = property_store.load()
+    cache_store = GeocodeCache(GEOCODE_CACHE_CSV_PATH)
+    cache = cache_store.load()
 
     parsed_count = 0
     skipped_count = 0
+    geocoded_count = 0
+    geocode_failed_count = 0
+    geocode_available = True
     for record in records.values():
         if record.status != "downloaded" or not record.file_path:
             continue
@@ -211,12 +257,70 @@ def cmd_parse() -> None:
 
         prop.parsed_at = now_iso()
         prop.source_file = record.file_path
+
+        if prop.location and geocode_available:
+            lat, lon, source = _try_geocode_location(prop.location, cache)
+            if lat and lon:
+                prop.lat = lat
+                prop.lon = lon
+            if source == "new":
+                geocoded_count += 1
+            elif source == "failed":
+                geocode_failed_count += 1
+            elif source == "unavailable":
+                geocode_available = False
+
         properties[record.url] = prop
         parsed_count += 1
 
     link_store.save(records)
     property_store.save(properties)
-    print(f"Feldolgozott hirdetés: {parsed_count}, kihagyva (nem hirdetés-oldal vagy nem parse-olható): {skipped_count}")
+    cache_store.save(cache)
+    print(
+        f"Feldolgozott hirdetés: {parsed_count}, kihagyva (nem hirdetés-oldal vagy nem parse-olható): {skipped_count}, "
+        f"geocode-olt: {geocoded_count}, geocode sikertelen: {geocode_failed_count}"
+    )
+
+
+def cmd_geocode(delay: float) -> None:
+    from .geocode import GeocodeCache
+
+    property_store = PropertyStore(PROPERTIES_CSV_PATH)
+    properties = property_store.load()
+    cache_store = GeocodeCache(GEOCODE_CACHE_CSV_PATH)
+    cache = cache_store.load()
+
+    geocoded_count = 0
+    cached_count = 0
+    failed_count = 0
+    geocode_available = True
+
+    for prop in properties.values():
+        if not prop.location or (prop.lat and prop.lon) or not geocode_available:
+            continue
+
+        lat, lon, source = _try_geocode_location(prop.location, cache)
+        if lat and lon:
+            prop.lat = lat
+            prop.lon = lon
+
+        if source == "cache":
+            cached_count += 1
+        elif source == "new":
+            geocoded_count += 1
+            if delay:
+                time.sleep(delay)
+        elif source == "failed":
+            failed_count += 1
+        elif source == "unavailable":
+            geocode_available = False
+
+    property_store.save(properties)
+    cache_store.save(cache)
+    print(
+        f"Geocode kész. Újonnan lekérdezett: {geocoded_count}, cache-ből: {cached_count}, "
+        f"sikertelen (cím nem található): {failed_count}"
+    )
 
 
 def cmd_show_data() -> None:
@@ -346,6 +450,9 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("show_data", help="A már feldolgozott ingatlanadatok (data/properties.csv) megjelenítése pandas táblázatként")
 
+    geocode_parser = sub.add_parser("geocode", help="A hirdetések location mezőjének GPS koordinátává alakítása (lokális Nominatim API-n keresztül)")
+    geocode_parser.add_argument("--delay", type=float, default=0.0, help="Várakozás (mp) két, nem cache-elt geocode kérés között (alapértelmezett: 0, lokális szerver esetén nem szükséges)")
+
     export_parser = sub.add_parser("export", help="A links.csv és a letöltött HTML fájlok exportálása egy zip fájlba")
     export_parser.add_argument("output", type=Path, nargs="?", default=Path("export.zip"), help="A létrehozandó zip fájl elérési útja (alapértelmezett: export.zip)")
 
@@ -362,6 +469,8 @@ def main(argv: list[str] | None = None) -> None:
         cmd_status()
     elif args.command == "parse":
         cmd_parse()
+    elif args.command == "geocode":
+        cmd_geocode(args.delay)
     elif args.command == "show_data":
         cmd_show_data()
     elif args.command == "export":
