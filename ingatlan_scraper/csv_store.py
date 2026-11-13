@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .models import PROPERTY_FIELDNAMES, Property
 
-FIELDNAMES = ["url", "portal", "status", "discovered_at", "downloaded_at", "file_path"]
+FIELDNAMES = ["url", "portal", "status", "page_type", "discovered_at", "downloaded_at", "file_path"]
 
 
 @dataclass
@@ -14,6 +14,7 @@ class LinkRecord:
     url: str
     portal: str
     status: str = "pending"  # "pending" | "downloaded" | "error"
+    page_type: str = ""  # "" (ismeretlen) | "listing" | "property" | "other"
     discovered_at: str = ""
     downloaded_at: str = ""
     file_path: str = ""
@@ -41,10 +42,16 @@ class LinkStore:
         tmp_path.replace(self.csv_path)
 
     @staticmethod
-    def add_new(records: dict[str, LinkRecord], url: str, portal: str, discovered_at: str) -> bool:
+    def add_new(
+        records: dict[str, LinkRecord],
+        url: str,
+        portal: str,
+        discovered_at: str,
+        page_type: str = "",
+    ) -> bool:
         if url in records:
             return False
-        records[url] = LinkRecord(url=url, portal=portal, discovered_at=discovered_at)
+        records[url] = LinkRecord(url=url, portal=portal, discovered_at=discovered_at, page_type=page_type)
         return True
 
 

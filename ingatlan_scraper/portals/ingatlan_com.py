@@ -3,7 +3,7 @@ from urllib.parse import urljoin
 
 from ..gtm import find_ecommerce_item
 from ..html_links import extract_hrefs
-from ..models import Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
 from .base import Portal
 
 # hirdetés URL-ek numerikus azonosítóval záródnak, pl. .../33069975
@@ -25,6 +25,15 @@ class IngatlanComPortal(Portal):
             if self.belongs_to(absolute) and _PROPERTY_LINK_RE.search(absolute):
                 links.add(self._normalize(absolute))
         return links
+
+    def classify_page(self, html: str, url: str) -> str:
+        # Az url maga eldönti a hirdetés-e: a kiadás-hirdetéseket is ide
+        # soroljuk, azokat csak a `parse_property` dobja el a sale-szűréskor.
+        if self.belongs_to(url) and _PROPERTY_LINK_RE.search(url):
+            return PAGE_TYPE_PROPERTY
+        if self.extract_property_links(html, url):
+            return PAGE_TYPE_LISTING
+        return PAGE_TYPE_OTHER
 
     def parse_property(self, html: str, url: str) -> Property | None:
         # Az ingatlan.com bot-védelme miatt élő hirdetés-HTML-en nem sikerült

@@ -6,10 +6,11 @@ from urllib.parse import parse_qs, urlparse
 import requests
 
 from ..downloader import USER_AGENT
-from ..models import Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
 from .base import Portal
 
 _SEARCH_PATH = "/api/rels/v1/adverts/search"
+_ADVERT_PATH_PREFIX = "/api/rels/v1/adverts/"
 
 
 class ZengaHuPortal(Portal):
@@ -63,6 +64,14 @@ class ZengaHuPortal(Portal):
                 continue
             links.add(self._normalize(f"https://www.zenga.hu/api/rels/v1/adverts/{advert_id}"))
         return links
+
+    def classify_page(self, html: str, url: str) -> str:
+        path = urlparse(url).path
+        if path == _SEARCH_PATH:
+            return PAGE_TYPE_LISTING
+        if path.startswith(_ADVERT_PATH_PREFIX):
+            return PAGE_TYPE_PROPERTY
+        return PAGE_TYPE_OTHER
 
     def parse_property(self, html: str, url: str) -> Property | None:
         try:

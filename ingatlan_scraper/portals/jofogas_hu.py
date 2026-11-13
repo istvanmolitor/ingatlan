@@ -6,7 +6,7 @@ from html import unescape
 from urllib.parse import parse_qs, urljoin
 
 from ..html_links import extract_hrefs
-from ..models import Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
 from .base import Portal
 
 # hirdetés URL-ek formátuma: ingatlan.jofogas.hu/<megye>/<cim>_<szamazonosito>.htm
@@ -35,6 +35,13 @@ class JofogasHuPortal(Portal):
             if self.belongs_to(absolute) and _PROPERTY_LINK_RE.search(absolute):
                 links.add(self._normalize(absolute))
         return links
+
+    def classify_page(self, html: str, url: str) -> str:
+        if self.belongs_to(url) and _PROPERTY_LINK_RE.search(url):
+            return PAGE_TYPE_PROPERTY
+        if self.extract_property_links(html, url):
+            return PAGE_TYPE_LISTING
+        return PAGE_TYPE_OTHER
 
     def parse_property(self, html: str, url: str) -> Property | None:
         target_match = _CUSTOMTARGET_RE.search(html)

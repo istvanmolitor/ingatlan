@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from ..downloader import USER_AGENT
-from ..models import Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
 from .base import Portal
 
 _API_BASE = "https://newdhapi03.dh.hu/api"
@@ -61,6 +61,20 @@ class DhHuPortal(Portal):
                 continue
             links.add(self._normalize(urljoin("https://dh.hu/", alias)))
         return links
+
+    def classify_page(self, html: str, url: str) -> str:
+        # Az útvonal ugyanúgy dönt, mint a `fetch_html`: a "/ingatlan/" alatti
+        # linkek hirdetés-részletezők, minden más lista/kereső oldal.
+        if urlparse(url).path.startswith("/ingatlan/"):
+            return PAGE_TYPE_PROPERTY
+
+        try:
+            data = json.loads(html)
+        except json.JSONDecodeError:
+            return PAGE_TYPE_OTHER
+        if ((data.get("result") or {}).get("items")) is not None:
+            return PAGE_TYPE_LISTING
+        return PAGE_TYPE_OTHER
 
     def parse_property(self, html: str, url: str) -> Property | None:
         try:

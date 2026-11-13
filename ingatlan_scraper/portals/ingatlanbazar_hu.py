@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
-from ..models import Property
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property
 from .base import Portal
+
+_ADVERT_PATH_PREFIX = "/api/property/"
+_SEARCH_PATH_PREFIX = "/api/property-search"
 
 
 class IngatlanbazarHuPortal(Portal):
@@ -30,6 +33,14 @@ class IngatlanbazarHuPortal(Portal):
                 continue
             links.add(self._normalize(urljoin(base_url, f"/api/property/{property_id}")))
         return links
+
+    def classify_page(self, html: str, url: str) -> str:
+        path = urlparse(url).path
+        if path.startswith(_ADVERT_PATH_PREFIX):
+            return PAGE_TYPE_PROPERTY
+        if path.startswith(_SEARCH_PATH_PREFIX):
+            return PAGE_TYPE_LISTING
+        return PAGE_TYPE_OTHER
 
     def parse_property(self, html: str, url: str) -> Property | None:
         try:

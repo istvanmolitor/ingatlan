@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .csv_store import LinkRecord, LinkStore, PropertyStore
+from .models import PAGE_TYPE_LISTING, PAGE_TYPE_PROPERTY
 from .portals import ALL_PORTALS, PORTALS_BY_NAME, find_portal_for_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -36,7 +37,7 @@ def cmd_seed() -> None:
     added = 0
     for portal in ALL_PORTALS:
         for url in portal.seed_urls:
-            if LinkStore.add_new(records, url, portal.name, now_iso()):
+            if LinkStore.add_new(records, url, portal.name, now_iso(), page_type=PAGE_TYPE_LISTING):
                 added += 1
     store.save(records)
     print(f"Seed linkek hozzáadva: {added} (összesen a CSV-ben: {len(records)})")
@@ -86,19 +87,19 @@ def cmd_status() -> None:
     print(format_row(rows[-1]))
 
 
-def build_batch(records: dict, pending_urls: list[str], count: int) -> list[str]:
+def _round_robin_batch(records: dict, urls: list[str], count: int) -> list[str]:
     """Letöltési sorrend összeállítása úgy, hogy ugyanazon portál linkjei
     ne kövessék egymást közvetlenül (portálonkénti körbeforgatás)."""
     by_portal: dict[str, list[str]] = {}
-    for url in pending_urls:
+    for url in urls:
         by_portal.setdefault(records[url].portal, []).append(url)
-    for urls in by_portal.values():
-        random.shuffle(urls)
+    for portal_urls in by_portal.values():
+        random.shuffle(portal_urls)
 
     batch: list[str] = []
     last_portal = None
     while len(batch) < count and any(by_portal.values()):
-        portal_names = [name for name, urls in by_portal.items() if urls]
+        portal_names = [name for name, portal_urls in by_portal.items() if portal_urls]
         random.shuffle(portal_names)
         # ha van más portál is, kerüljük az előző kör utolsó portálját
         if last_portal in portal_names and len(portal_names) > 1:
@@ -107,9 +108,23 @@ def build_batch(records: dict, pending_urls: list[str], count: int) -> list[str]
         for portal_name in portal_names:
             if len(batch) >= count:
                 break
-            urls = by_portal[portal_name]
-            batch.append(urls.pop())
+            portal_urls = by_portal[portal_name]
+            batch.append(portal_urls.pop())
             last_portal = portal_name
+    return batch
+
+
+def build_batch(records: dict, pending_urls: list[str], count: int) -> list[str]:
+    """Letöltési sorrend összeállítása. A lista oldalakat előnyben
+    részesítjük, mivel egy letöltésükből több új link és (API-alapú
+    portáloknál) több ingatlan adata is kinyerhető, mint egy konkrét
+    hirdetés oldaláéból."""
+    listing_urls = [url for url in pending_urls if records[url].page_type == PAGE_TYPE_LISTING]
+    other_urls = [url for url in pending_urls if records[url].page_type != PAGE_TYPE_LISTING]
+
+    batch = _round_robin_batch(records, listing_urls, count)
+    if len(batch) < count:
+        batch += _round_robin_batch(records, other_urls, count - len(batch))
     return batch
 
 
@@ -120,7 +135,7 @@ def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
         print("A CSV üres, előbb seedelünk...")
         for portal in ALL_PORTALS:
             for url in portal.seed_urls:
-                LinkStore.add_new(records, url, portal.name, now_iso())
+                LinkStore.add_new(records, url, portal.name, now_iso(), page_type=PAGE_TYPE_LISTING)
 
     pending_urls = [url for url, record in records.items() if record.status in ("pending", "error")]
     if not pending_urls:
@@ -153,10 +168,11 @@ def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
         record.status = "downloaded"
         record.downloaded_at = now_iso()
         record.file_path = str(file_path.relative_to(BASE_DIR))
+        record.page_type = portal.classify_page(html, url)
 
         discovered_links = portal.extract_property_links(html, url)
         for link in discovered_links:
-            if LinkStore.add_new(records, link, portal.name, now_iso()):
+            if LinkStore.add_new(records, link, portal.name, now_iso(), page_type=PAGE_TYPE_PROPERTY):
                 new_links_found += 1
 
         if i < len(batch) - 1:
@@ -187,6 +203,7 @@ def cmd_parse() -> None:
             continue
 
         html = html_path.read_text(encoding="utf-8")
+        record.page_type = portal.classify_page(html, record.url)
         prop = portal.parse_property(html, record.url)
         if prop is None:
             skipped_count += 1
@@ -197,6 +214,7 @@ def cmd_parse() -> None:
         properties[record.url] = prop
         parsed_count += 1
 
+    link_store.save(records)
     property_store.save(properties)
     print(f"Feldolgozott hirdetés: {parsed_count}, kihagyva (nem hirdetés-oldal vagy nem parse-olható): {skipped_count}")
 
@@ -298,6 +316,7 @@ def cmd_import(input_path: Path) -> None:
                 existing.status = incoming.status
                 existing.downloaded_at = incoming.downloaded_at
                 existing.file_path = incoming.file_path
+                existing.page_type = incoming.page_type
                 upgraded += 1
 
     store.save(records)

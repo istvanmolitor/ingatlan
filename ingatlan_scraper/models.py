@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Egy link/HTML tartalmának típusa: lista (kereső/listázó) oldal, konkrét
+# ingatlan hirdetés, vagy egyéb (sem lista, sem hirdetés) oldal.
+PAGE_TYPE_LISTING = "listing"
+PAGE_TYPE_PROPERTY = "property"
+PAGE_TYPE_OTHER = "other"
+
 PROPERTY_FIELDNAMES = [
     "url",
     "portal",
