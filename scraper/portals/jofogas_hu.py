@@ -66,8 +66,10 @@ class JofogasHuPortal(Portal):
         breadcrumb = next((node for node in graph if node.get("@type") == "BreadcrumbList"), None)
         location = ""
         if breadcrumb is not None:
-            # az első két elem mindig "Jófogás" és "Ingatlan", azokat kihagyjuk
-            names = [item["name"] for item in breadcrumb.get("itemListElement", [])[2:]]
+            # az első három elem mindig "Jófogás", "Ingatlan" és a kategória
+            # (pl. "Lakás"), azokat kihagyjuk - a kategóriát a property_type
+            # már tartalmazza a product.category mezőből.
+            names = [item["name"] for item in breadcrumb.get("itemListElement", [])[3:]]
             location = ", ".join(names)
 
         size = next(

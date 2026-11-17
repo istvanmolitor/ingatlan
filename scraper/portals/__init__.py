@@ -1,13 +1,13 @@
 from .base import Portal
 from .dh_hu import DhHuPortal
-from .ingatlan_com import IngatlanComPortal
+# from .ingatlan_com import IngatlanComPortal
 from .ingatlanbazar_hu import IngatlanbazarHuPortal
 from .jofogas_hu import JofogasHuPortal
 from .oc_hu import OcHuPortal
 from .zenga_hu import ZengaHuPortal
 
 ALL_PORTALS: list[Portal] = [
-    IngatlanComPortal(),
+    # IngatlanComPortal(),
     OcHuPortal(),
     JofogasHuPortal(),
     IngatlanbazarHuPortal(),

@@ -138,7 +138,11 @@ def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
             for url in portal.seed_urls:
                 LinkStore.add_new(records, url, portal.name, now_iso(), page_type=PAGE_TYPE_LISTING)
 
-    pending_urls = [url for url, record in records.items() if record.status in ("pending", "error")]
+    pending_urls = [
+        url
+        for url, record in records.items()
+        if record.status in ("pending", "error") and record.portal in PORTALS_BY_NAME
+    ]
     if not pending_urls:
         print("Nincs letöltésre váró link.")
         store.save(records)
@@ -255,7 +259,7 @@ def cmd_parse() -> None:
             skipped_count += 1
             continue
 
-        prop.parsed_at = now_iso()
+        prop.scraped_at = record.downloaded_at
         prop.source_file = record.file_path
 
         if prop.location and geocode_available:
@@ -331,7 +335,7 @@ def cmd_show_data() -> None:
         return
 
     df = pd.read_csv(PROPERTIES_CSV_PATH)
-    df = df.drop(columns=["url", "title", "parsed_at", "source_file"], errors="ignore")
+    df = df.drop(columns=["url", "title", "scraped_at", "source_file"], errors="ignore")
     pd.set_option("display.max_rows", None)
     pd.set_option("display.max_columns", None)
     pd.set_option("display.width", None)

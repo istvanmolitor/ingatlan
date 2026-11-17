@@ -70,7 +70,7 @@ PROPERTY_FIELDNAMES = [
     "location",
     "lat",
     "lon",
-    "parsed_at",
+    "scraped_at",
     "source_file",
 ]
 
@@ -125,5 +125,5 @@ class Property:
     location: str = ""
     lat: str = ""
     lon: str = ""
-    parsed_at: str = ""
+    scraped_at: str = ""
     source_file: str = ""

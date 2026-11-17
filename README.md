@@ -1,4 +1,4 @@
-# ingatlan_scraper
+# scraper
 
 Ingatlanportálok hirdetéseinek gyűjtésére szolgáló eszköz: HTML-eket tölt le
 portálonként mappázva, nyomon követi a linkeket egy CSV-ben, majd a letöltött
@@ -17,14 +17,14 @@ pip install requests pandas
 Mindig a projekt gyökeréből (`/home/molitor/work/ingatlan`) futtasd:
 
 ```
-python3 -m ingatlan_scraper seed
-python3 -m ingatlan_scraper fetch --count 3
-python3 -m ingatlan_scraper status
-python3 -m ingatlan_scraper parse
-python3 -m ingatlan_scraper geocode
-python3 -m ingatlan_scraper show_data
-python3 -m ingatlan_scraper export [output.zip]
-python3 -m ingatlan_scraper import <input.zip>
+python3 -m scraper seed
+python3 -m scraper fetch --count 3
+python3 -m scraper status
+python3 -m scraper parse
+python3 -m scraper geocode
+python3 -m scraper show_data
+python3 -m scraper export [output.zip]
+python3 -m scraper import <input.zip>
 ```
 
 ### `seed`
@@ -40,7 +40,7 @@ Letölt egy kis, véletlenszerűen kiválasztott adagot a még le nem töltött
 (`pending` vagy korábban hibázott `error` státuszú) linkekből:
 
 ```
-python3 -m ingatlan_scraper fetch --count 3 --min-delay 2 --max-delay 6
+python3 -m scraper fetch --count 3 --min-delay 2 --max-delay 6
 ```
 
 - `--count`: hány linket töltsön le ebben a futásban (alapértelmezett: 3)
@@ -80,7 +80,7 @@ duplikál).
 ### `geocode`
 
 ```
-python3 -m ingatlan_scraper geocode
+python3 -m scraper geocode
 ```
 
 A `parse` parancs már automatikusan geocode-olja az új hirdetéseket, ez a
@@ -123,7 +123,7 @@ formában kiírja a már feldolgozott ingatlanadatokat.
 ### `export`
 
 ```
-python3 -m ingatlan_scraper export backup.zip
+python3 -m scraper export backup.zip
 ```
 
 Egy zip fájlba csomagolja a `data/links.csv`-t és az összes letöltött
@@ -133,7 +133,7 @@ szerkezetben). Ha nem adsz meg kimeneti fájlnevet, `export.zip`-be ment.
 ### `import`
 
 ```
-python3 -m ingatlan_scraper import backup.zip
+python3 -m scraper import backup.zip
 ```
 
 Egy korábban `export`-tal létrehozott zip tartalmát (HTML fájlok + `links.csv`)
@@ -156,7 +156,7 @@ adatbázisba lehessen összefésülni.
 data/
   links.csv      # url, portal, status, discovered_at, downloaded_at, file_path
   properties.csv # url, portal, property_id, property_type, title, price,
-                 # currency, area_sqm, rooms, location, lat, lon, parsed_at,
+                 # currency, area_sqm, rooms, location, lat, lon, scraped_at,
                  # source_file
   geocode_cache.csv # address, lat, lon (a geocode parancs gyorsítótára)
   html/
@@ -166,7 +166,7 @@ data/
 
 ## Új portál hozzáadása
 
-1. Új fájl a `ingatlan_scraper/portals/` alá, benne egy `Portal` alosztály:
+1. Új fájl a `scraper/portals/` alá, benne egy `Portal` alosztály:
    - `name`, `domain`, `seed_urls`
    - `extract_property_links(html, base_url) -> set[str]`: hogyan lehet a
      letöltött (listázó vagy hirdetés-) oldalból kinyerni a hirdetés-
@@ -179,7 +179,7 @@ data/
      felülírható, hogy a sima GET helyett a megfelelő API-hívást végezze el
      (lásd `DhHuPortal` / `ZengaHuPortal`)
 2. Felvenni az új osztály példányát az `ALL_PORTALS` listába
-   (`ingatlan_scraper/portals/__init__.py`).
+   (`scraper/portals/__init__.py`).
 
 ## Ismert korlátozás
 
@@ -189,16 +189,16 @@ a link később újra megpróbálkozik vele), de magát a bot-védelmet a progra
 nem próbálja megkerülni. Emiatt az `IngatlanComPortal.parse_property` is csak
 feltételezésen alapul (nem volt tesztelhető valódi letöltött HTML-en) — ha
 sikerül valódi hirdetés-HTML-hez hozzáférni, a mezőneveket a
-`ingatlan_scraper/portals/ingatlan_com.py`-ban kell majd pontosítani.
+`scraper/portals/ingatlan_com.py`-ban kell majd pontosítani.
 
 ## Támogatott portálok
 
 - **oc.hu**: a hirdetés-részletező oldalakba ágyazott Google Tag Manager
   `dataLayer.push({... "event":"view_item" ...})` hívásból nyeri ki az
-  adatokat (`ingatlan_scraper/gtm.py`).
+  adatokat (`scraper/gtm.py`).
 - **jofogas.hu** (`ingatlan.jofogas.hu`): sima szerveroldali HTML, a
   hirdetés-részletező oldalak egy schema.org `Product` JSON-LD blokkot
-  tartalmaznak (`ingatlan_scraper/portals/jofogas_hu.py`).
+  tartalmaznak (`scraper/portals/jofogas_hu.py`).
 - **ingatlanbazar.hu**: a weboldal kliensoldali (Angular) SPA, de a
   hirdetéseket egy nyilvános, sima GET-tel elérhető JSON API szolgáltatja ki
   (`/api/property-search`, `/api/property/<id>`), ezt használjuk HTML
