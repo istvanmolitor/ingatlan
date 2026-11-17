@@ -129,7 +129,7 @@ def build_batch(records: dict, pending_urls: list[str], count: int) -> list[str]
     return batch
 
 
-def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
+def cmd_fetch(count: int, min_delay: float, max_delay: float, save_every: int) -> None:
     store = LinkStore(CSV_PATH)
     records = store.load()
     if not records:
@@ -151,39 +151,47 @@ def cmd_fetch(count: int, min_delay: float, max_delay: float) -> None:
     batch = build_batch(records, pending_urls, count)
 
     new_links_found = 0
-    for i, url in enumerate(batch):
-        record = records[url]
-        portal = PORTALS_BY_NAME.get(record.portal)
-        if portal is None:
-            print(f"Ismeretlen portál ehhez a linkhez, kihagyva: {url}")
-            continue
+    downloaded_since_save = 0
+    try:
+        for i, url in enumerate(batch):
+            record = records[url]
+            portal = PORTALS_BY_NAME.get(record.portal)
+            if portal is None:
+                print(f"Ismeretlen portál ehhez a linkhez, kihagyva: {url}")
+                continue
 
-        print(f"Letöltés ({i + 1}/{len(batch)}): {url}")
-        try:
-            html = portal.fetch_html(url)
-        except Exception as exc:  # noqa: BLE001 - egy sikertelen letöltés ne állítsa meg a futást
-            print(f"  Hiba letöltés közben: {exc}")
-            record.status = "error"
-            continue
+            print(f"Letöltés ({i + 1}/{len(batch)}): {url}")
+            try:
+                html = portal.fetch_html(url)
+            except Exception as exc:  # noqa: BLE001 - egy sikertelen letöltés ne állítsa meg a futást
+                print(f"  Hiba letöltés közben: {exc}")
+                record.status = "error"
+                continue
 
-        file_path = html_file_path(portal.slug, url)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(html, encoding="utf-8")
+            file_path = html_file_path(portal.slug, url)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(html, encoding="utf-8")
 
-        record.status = "downloaded"
-        record.downloaded_at = now_iso()
-        record.file_path = str(file_path.relative_to(BASE_DIR))
-        record.page_type = portal.classify_page(html, url)
+            record.status = "downloaded"
+            record.downloaded_at = now_iso()
+            record.file_path = str(file_path.relative_to(BASE_DIR))
+            record.page_type = portal.classify_page(html, url)
 
-        discovered_links = portal.extract_property_links(html, url)
-        for link in discovered_links:
-            if LinkStore.add_new(records, link, portal.name, now_iso(), page_type=PAGE_TYPE_PROPERTY):
-                new_links_found += 1
+            discovered_links = portal.extract_property_links(html, url)
+            for link in discovered_links:
+                if LinkStore.add_new(records, link, portal.name, now_iso(), page_type=PAGE_TYPE_PROPERTY):
+                    new_links_found += 1
 
-        if i < len(batch) - 1:
-            time.sleep(random.uniform(min_delay, max_delay))
+            downloaded_since_save += 1
+            if save_every > 0 and downloaded_since_save >= save_every:
+                store.save(records)
+                downloaded_since_save = 0
 
-    store.save(records)
+            if i < len(batch) - 1:
+                time.sleep(random.uniform(min_delay, max_delay))
+    finally:
+        store.save(records)
+
     print(f"Kész. Újonnan talált link: {new_links_found}")
 
 
@@ -327,6 +335,81 @@ def cmd_geocode(delay: float) -> None:
     )
 
 
+def cmd_sync_html() -> None:
+    """Olyan linkek 'downloaded'-re állítása, amelyekhez a hozzá tartozó HTML
+    fájl már megvan a lemezen (data/html/<portal>/<url sha1 16 karakter>.html
+    néven), de a links.csv ezt elmentés/megszakítás hiányában még nem tudja -
+    pl. azért, mert a letöltés valamiért a státusz mentése előtt megszakadt."""
+    store = LinkStore(CSV_PATH)
+    records = store.load()
+
+    updated = 0
+    new_links_found = 0
+    for record in list(records.values()):
+        if record.status == "downloaded" and record.file_path:
+            continue
+
+        portal = PORTALS_BY_NAME.get(record.portal)
+        if portal is None:
+            continue
+
+        file_path = html_file_path(portal.slug, record.url)
+        if not file_path.exists():
+            continue
+
+        html = file_path.read_text(encoding="utf-8")
+        record.status = "downloaded"
+        record.file_path = str(file_path.relative_to(BASE_DIR))
+        if not record.downloaded_at:
+            mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=timezone.utc)
+            record.downloaded_at = mtime.isoformat(timespec="seconds")
+        record.page_type = portal.classify_page(html, record.url)
+        updated += 1
+
+        for link in portal.extract_property_links(html, record.url):
+            if LinkStore.add_new(records, link, portal.name, now_iso(), page_type=PAGE_TYPE_PROPERTY):
+                new_links_found += 1
+
+    store.save(records)
+    print(f"Szinkronizálva: {updated} link 'downloaded'-re állítva a meglévő HTML fájl alapján. Újonnan talált link: {new_links_found}")
+
+
+def cmd_check_html(delete: bool) -> None:
+    store = LinkStore(CSV_PATH)
+    records = store.load()
+    referenced_paths = {(BASE_DIR / record.file_path).resolve() for record in records.values() if record.file_path}
+
+    if not HTML_DIR.exists():
+        print("A data/html mappa nem létezik.")
+        return
+
+    all_html_files = sorted(HTML_DIR.rglob("*.html"))
+    orphan_files = [f for f in all_html_files if f.resolve() not in referenced_paths]
+    missing_count = sum(1 for path in referenced_paths if not path.exists())
+
+    print(f"HTML fájlok a data/html mappában: {len(all_html_files)}, hivatkozott fájl a links.csv-ben: {len(referenced_paths)}")
+    print(f"Árva (linkhez nem tartozó) HTML fájl: {len(orphan_files)}")
+    if missing_count:
+        print(f"Hiányzó fájl (links.csv hivatkozik rá, de nincs a lemezen): {missing_count}")
+
+    if orphan_files:
+        preview = orphan_files if delete else orphan_files[:20]
+        for path in preview:
+            print(f"  {path.relative_to(BASE_DIR)}")
+        if not delete and len(orphan_files) > 20:
+            print(f"  ... és még {len(orphan_files) - 20} fájl")
+
+    if not orphan_files:
+        return
+
+    if delete:
+        for path in orphan_files:
+            path.unlink()
+        print(f"Törölve: {len(orphan_files)} árva HTML fájl.")
+    else:
+        print("A törléshez add meg a --delete kapcsolót.")
+
+
 def cmd_show_data() -> None:
     import pandas as pd
 
@@ -447,12 +530,28 @@ def main(argv: list[str] | None = None) -> None:
     fetch_parser.add_argument("--count", type=int, default=3, help="Hány linket töltsön le ebben a futásban (alapértelmezett: 3)")
     fetch_parser.add_argument("--min-delay", type=float, default=2.0, help="Minimum várakozás (mp) két letöltés között")
     fetch_parser.add_argument("--max-delay", type=float, default=6.0, help="Maximum várakozás (mp) két letöltés között")
+    fetch_parser.add_argument(
+        "--save-every",
+        type=int,
+        default=10,
+        help="Ennyi sikeres letöltésenként mentse a links.csv-t futás közben, hogy megszakadás esetén ne vesszen el az állapot (0 = csak a végén ment, alapértelmezett: 10)",
+    )
 
     sub.add_parser("status", help="CSV statisztika portálonként")
 
     sub.add_parser("parse", help="Letöltött HTML-ek feldolgozása egységes Property DTO-vá és közös CSV-be írása")
 
     sub.add_parser("show_data", help="A már feldolgozott ingatlanadatok (data/properties.csv) megjelenítése pandas táblázatként")
+
+    sub.add_parser(
+        "sync_html",
+        help="Azon linkek 'downloaded'-re állítása a links.csv-ben, amelyekhez a HTML fájl már a lemezen van, de a státusz nem lett elmentve",
+    )
+
+    check_html_parser = sub.add_parser(
+        "check_html", help="A data/html alatti HTML fájlok összevetése a links.csv-vel, árva (linkhez nem tartozó) fájlok listázása/törlése"
+    )
+    check_html_parser.add_argument("--delete", action="store_true", help="Az árva HTML fájlok törlése (alapesetben csak listázza őket)")
 
     geocode_parser = sub.add_parser("geocode", help="A hirdetések location mezőjének GPS koordinátává alakítása (lokális Nominatim API-n keresztül)")
     geocode_parser.add_argument("--delay", type=float, default=0.0, help="Várakozás (mp) két, nem cache-elt geocode kérés között (alapértelmezett: 0, lokális szerver esetén nem szükséges)")
@@ -468,7 +567,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "seed":
         cmd_seed()
     elif args.command == "fetch":
-        cmd_fetch(args.count, args.min_delay, args.max_delay)
+        cmd_fetch(args.count, args.min_delay, args.max_delay, args.save_every)
     elif args.command == "status":
         cmd_status()
     elif args.command == "parse":
@@ -477,6 +576,10 @@ def main(argv: list[str] | None = None) -> None:
         cmd_geocode(args.delay)
     elif args.command == "show_data":
         cmd_show_data()
+    elif args.command == "sync_html":
+        cmd_sync_html()
+    elif args.command == "check_html":
+        cmd_check_html(args.delete)
     elif args.command == "export":
         cmd_export(args.output)
     elif args.command == "import":
