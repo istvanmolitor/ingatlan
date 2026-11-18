@@ -85,6 +85,10 @@ class ZengaHuPortal(Portal):
         if str(data.get("saleType", "")).upper() != "SALE":
             return None
 
+        # A válasz "state" mezője feltehetően az ingatlan állapotát jelöli
+        # numerikus kóddal (0-8), de a kódok jelentését (szöveges feloldását)
+        # nem sikerült megtalálni sem az API-ban, sem a kliens JS bundle-ökben,
+        # ezért itt nem vesszük figyelembe - a condition mező EGYEB marad.
         return Property(
             url=url,
             portal=self.name,

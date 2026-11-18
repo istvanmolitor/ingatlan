@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from ..downloader import USER_AGENT
-from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_property_type, parse_area_sqm, parse_rooms
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_condition, normalize_property_type, parse_area_sqm, parse_rooms
 from .base import Portal
 
 _API_BASE = "https://newdhapi03.dh.hu/api"
@@ -89,11 +89,14 @@ class DhHuPortal(Portal):
         if "kiad" in str(result.get("contractTypeName", "")).lower():
             return None
 
+        general = ((result.get("details") or {}).get("general")) or {}
+
         return Property(
             url=url,
             portal=self.name,
             property_id=str(result.get("referenceNumber", "")),
             property_type=normalize_property_type(result.get("propertyTypeName")),
+            condition=normalize_condition(general.get("buildingInsideCondition")),
             title=str(result.get("address", "")),
             price=str(result.get("priceNumeric", "")),
             currency=str(result.get("priceOriginalCurrency", "")),

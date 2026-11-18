@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from urllib.parse import urljoin, urlparse
 
-from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_property_type, parse_area_sqm, parse_rooms
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_condition, normalize_property_type, parse_area_sqm, parse_rooms
 from .base import Portal
 
 _ADVERT_PATH_PREFIX = "/api/property/"
@@ -75,6 +75,7 @@ class IngatlanbazarHuPortal(Portal):
             portal=self.name,
             property_id=str(prop.get("propertyId", "")),
             property_type=normalize_property_type(field_value("Ingatlan típusa")),
+            condition=normalize_condition(field_value("Ingatlan állapot")),
             title=str(prop.get("userTitle", "")),
             price=str(prop.get("priceHUF", "")),
             currency="HUF",

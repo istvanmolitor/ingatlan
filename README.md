@@ -155,9 +155,9 @@ adatbázisba lehessen összefésülni.
 ```
 data/
   links.csv      # url, portal, status, discovered_at, downloaded_at, file_path
-  properties.csv # url, portal, property_id, property_type, title, price,
-                 # currency, area_sqm, rooms, location, lat, lon, scraped_at,
-                 # source_file
+  properties.csv # url, portal, property_id, property_type, condition, title,
+                 # price, currency, area_sqm, rooms, location, lat, lon,
+                 # scraped_at, source_file
   geocode_cache.csv # address, lat, lon (a geocode parancs gyorsítótára)
   html/
     ingatlan_com/<hash>.html

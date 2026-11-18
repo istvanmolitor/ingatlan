@@ -4,7 +4,7 @@ import csv
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .models import PROPERTY_FIELDNAMES, Property, normalize_property_type, parse_area_sqm, parse_rooms
+from .models import PROPERTY_FIELDNAMES, Property, normalize_condition, normalize_property_type, parse_area_sqm, parse_rooms
 
 FIELDNAMES = ["url", "portal", "status", "page_type", "discovered_at", "downloaded_at", "file_path"]
 
@@ -70,6 +70,7 @@ class PropertyStore:
                         **row,
                         "area_sqm": parse_area_sqm(row.get("area_sqm")),
                         "property_type": normalize_property_type(row.get("property_type")),
+                        "condition": normalize_condition(row.get("condition")),
                         "rooms": parse_rooms(row.get("rooms")),
                     }
                 )

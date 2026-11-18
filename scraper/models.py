@@ -57,11 +57,58 @@ def normalize_property_type(value: object) -> PropertyType:
         return PropertyType.HAZ
     return PropertyType.EGYEB
 
+
+class PropertyCondition(str, Enum):
+    """Egységes ingatlan állapot, portálonként eltérő elnevezések helyett.
+
+    Pl. a dh.hu "6 - Új. ép.", az oc.hu "Kiváló" helyett mindkettő
+    `PropertyCondition.UJ`, illetve `PropertyCondition.KIVALO` értékre
+    normalizálódik.
+    """
+
+    UJ = "uj"
+    FELUJITOTT = "felujitott"
+    KIVALO = "kivalo"
+    JO = "jo"
+    ATLAGOS = "atlagos"
+    FELUJITANDO = "felujitando"
+    BONTANDO = "bontando"
+    EGYEB = "egyeb"
+
+
+def normalize_condition(value: object) -> PropertyCondition:
+    """Portálonként eltérő condition/állapot szöveg (pl. "6 - Új. ép.",
+    "Jó állapotú", "Kiváló") egységes `PropertyCondition` értékké alakítása.
+
+    A sorrend fontos: a specifikusabb kulcsszavakat (pl. "felujitando") előbb
+    kell vizsgálni, mert azok szövege egy generikusabb kulcsszót (pl. "uj",
+    ami a "felUJitott"-ban is megtalálható) is tartalmazhat.
+    """
+    if not value:
+        return PropertyCondition.EGYEB
+    text = _strip_accents(str(value)).lower()
+    if "bontand" in text:
+        return PropertyCondition.BONTANDO
+    if "felujitand" in text or ("felujit" in text and "szorul" in text):
+        return PropertyCondition.FELUJITANDO
+    if "felujit" in text:
+        return PropertyCondition.FELUJITOTT
+    if any(keyword in text for keyword in ("uj", "new")):
+        return PropertyCondition.UJ
+    if any(keyword in text for keyword in ("kivalo", "nagyon jo", "premium", "excellent")):
+        return PropertyCondition.KIVALO
+    if any(keyword in text for keyword in ("atlagos", "kozepes", "lakhato", "average")):
+        return PropertyCondition.ATLAGOS
+    if any(keyword in text for keyword in ("jo", "good")):
+        return PropertyCondition.JO
+    return PropertyCondition.EGYEB
+
 PROPERTY_FIELDNAMES = [
     "url",
     "portal",
     "property_id",
     "property_type",
+    "condition",
     "title",
     "price",
     "currency",
@@ -117,6 +164,7 @@ class Property:
     portal: str
     property_id: str = ""
     property_type: PropertyType = PropertyType.EGYEB
+    condition: PropertyCondition = PropertyCondition.EGYEB
     title: str = ""
     price: str = ""
     currency: str = ""

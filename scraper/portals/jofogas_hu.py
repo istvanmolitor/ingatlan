@@ -6,7 +6,7 @@ from html import unescape
 from urllib.parse import parse_qs, urljoin
 
 from ..html_links import extract_hrefs
-from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_property_type, parse_area_sqm, parse_rooms
+from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Property, normalize_condition, normalize_property_type, parse_area_sqm, parse_rooms
 from .base import Portal
 
 # hirdetés URL-ek formátuma: ingatlan.jofogas.hu/<megye>/<cim>_<szamazonosito>.htm
@@ -80,6 +80,10 @@ class JofogasHuPortal(Portal):
             (prop.get("value", "") for prop in product.get("additionalProperty", []) if prop.get("name") == "Szobák száma"),
             "",
         )
+        condition = next(
+            (prop.get("value", "") for prop in product.get("additionalProperty", []) if prop.get("name") == "Állapot"),
+            "",
+        )
         offers = product.get("offers") or {}
 
         return Property(
@@ -87,6 +91,7 @@ class JofogasHuPortal(Portal):
             portal=self.name,
             property_id=str(product.get("sku", "")),
             property_type=normalize_property_type(product.get("category")),
+            condition=normalize_condition(condition),
             title=str(product.get("name", "")),
             price=str(offers.get("price", "")),
             currency=str(offers.get("priceCurrency", "")),
