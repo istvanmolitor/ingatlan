@@ -100,4 +100,5 @@ class ZengaHuPortal(Portal):
             area_sqm=parse_area_sqm(data.get("floorAreaSize")),
             rooms=parse_rooms(data.get("numberOfRooms")),
             location=str(data.get("address", "")),
+            city=str((data.get("loanInfos") or {}).get("city", "")),
         )

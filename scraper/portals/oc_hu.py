@@ -74,4 +74,5 @@ class OcHuPortal(Portal):
             currency=str(item.get("currency", "")),
             area_sqm=parse_area_sqm(item.get("size")),
             location=location,
+            city=str(item.get("location_city", "")),
         )

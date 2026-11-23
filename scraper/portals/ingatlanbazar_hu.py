@@ -82,4 +82,5 @@ class IngatlanbazarHuPortal(Portal):
             area_sqm=parse_area_sqm(prop.get("area")),
             rooms=parse_rooms(prop.get("rooms")),
             location=location,
+            city=str(prop.get("settlement", "")),
         )

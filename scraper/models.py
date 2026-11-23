@@ -115,6 +115,7 @@ PROPERTY_FIELDNAMES = [
     "area_sqm",
     "rooms",
     "location",
+    "city",
     "lat",
     "lon",
     "scraped_at",
@@ -171,6 +172,7 @@ class Property:
     area_sqm: int = 0
     rooms: float | None = None
     location: str = ""
+    city: str = ""
     lat: str = ""
     lon: str = ""
     scraped_at: str = ""

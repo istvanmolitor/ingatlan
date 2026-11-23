@@ -64,4 +64,5 @@ class IngatlanComPortal(Portal):
             currency=pick("currency", default="HUF"),
             area_sqm=parse_area_sqm(pick("size", "area", "living_area")),
             location=pick("location_city", "city", "settlement"),
+            city=pick("location_city", "city", "settlement"),
         )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -11,6 +12,17 @@ from ..models import PAGE_TYPE_LISTING, PAGE_TYPE_OTHER, PAGE_TYPE_PROPERTY, Pro
 from .base import Portal
 
 _API_BASE = "https://newdhapi03.dh.hu/api"
+
+# A dh.hu "address" mezője "<irányítószám> <város>[ <kerület>][ , <extra>]"
+# formátumú, pl. "1098 Budapest 9. kerület , Pöttyös utcai metró megállónál
+# közvetlenül!" vagy "2000 Szentendre ". A várost az irányítószám és az első
+# vessző közötti rész adja.
+_ADDRESS_CITY_RE = re.compile(r"^\s*\d{4}\s+(.*?)\s*(?:,.*)?$")
+
+
+def _city_from_address(address: str) -> str:
+    match = _ADDRESS_CITY_RE.match(address)
+    return match.group(1) if match else ""
 
 
 class DhHuPortal(Portal):
@@ -90,6 +102,7 @@ class DhHuPortal(Portal):
             return None
 
         general = ((result.get("details") or {}).get("general")) or {}
+        address = str(result.get("address", ""))
 
         return Property(
             url=url,
@@ -97,10 +110,11 @@ class DhHuPortal(Portal):
             property_id=str(result.get("referenceNumber", "")),
             property_type=normalize_property_type(result.get("propertyTypeName")),
             condition=normalize_condition(general.get("buildingInsideCondition")),
-            title=str(result.get("address", "")),
+            title=address,
             price=str(result.get("priceNumeric", "")),
             currency=str(result.get("priceOriginalCurrency", "")),
             area_sqm=parse_area_sqm(result.get("area")),
             rooms=parse_rooms(result.get("rooms")),
-            location=str(result.get("address", "")),
+            location=address,
+            city=_city_from_address(address),
         )

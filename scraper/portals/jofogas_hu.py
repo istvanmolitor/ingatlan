@@ -65,12 +65,20 @@ class JofogasHuPortal(Portal):
 
         breadcrumb = next((node for node in graph if node.get("@type") == "BreadcrumbList"), None)
         location = ""
+        city = ""
         if breadcrumb is not None:
             # az első három elem mindig "Jófogás", "Ingatlan" és a kategória
             # (pl. "Lakás"), azokat kihagyjuk - a kategóriát a property_type
             # már tartalmazza a product.category mezőből.
             names = [item["name"] for item in breadcrumb.get("itemListElement", [])[3:]]
             location = ", ".join(names)
+            # names[0] a megye, names[1] a település (ami önmagában is
+            # tartalmazhat több, vesszővel elválasztott nevet, pl.
+            # "Agárd, Gárdony" - ilyenkor az elsőt vesszük városnak).
+            if len(names) > 1:
+                city = names[1].split(",")[0].strip()
+            elif names:
+                city = names[0].split(",")[0].strip()
 
         size = next(
             (prop.get("value", "") for prop in product.get("additionalProperty", []) if prop.get("name") == "Méret"),
@@ -98,4 +106,5 @@ class JofogasHuPortal(Portal):
             area_sqm=parse_area_sqm(size),
             rooms=parse_rooms(rooms),
             location=location,
+            city=city,
         )

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .csv_store import LinkRecord, LinkStore, PropertyStore
-from .models import PAGE_TYPE_LISTING, PAGE_TYPE_PROPERTY
+from .models import PAGE_TYPE_LISTING, PAGE_TYPE_PROPERTY, Property
 from .portals import ALL_PORTALS, PORTALS_BY_NAME, find_portal_for_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -233,6 +233,22 @@ def _try_geocode_location(location: str, cache: dict[str, tuple[str, str]]) -> t
         return "", "", "unavailable"
 
 
+def _try_geocode_property(prop: Property, cache: dict[str, tuple[str, str]]) -> tuple[str, str, str]:
+    """Egy Property GPS-koordinátáinak meghatározása: elsőként a teljes
+    location mező alapján próbálkozunk, mert az pontosabb (utca szintű)
+    találatot adhat; ha ez nem talál találatot (pl. a location olyan szabad
+    szöveget is tartalmaz, amit a geocoding API nem ismer fel), a city mező
+    alapján próbálkozunk újra - ez kevésbé pontos (település-szintű), de
+    nagyobb eséllyel ad koordinátát, mint a semmi."""
+    if prop.location:
+        lat, lon, source = _try_geocode_location(prop.location, cache)
+        if source == "unavailable" or (lat and lon):
+            return lat, lon, source
+    if prop.city:
+        return _try_geocode_location(prop.city, cache)
+    return "", "", "failed"
+
+
 def cmd_parse() -> None:
     from .geocode import GeocodeCache
 
@@ -270,8 +286,8 @@ def cmd_parse() -> None:
         prop.scraped_at = record.downloaded_at
         prop.source_file = record.file_path
 
-        if prop.location and geocode_available:
-            lat, lon, source = _try_geocode_location(prop.location, cache)
+        if (prop.location or prop.city) and geocode_available:
+            lat, lon, source = _try_geocode_property(prop, cache)
             if lat and lon:
                 prop.lat = lat
                 prop.lon = lon
@@ -308,10 +324,10 @@ def cmd_geocode(delay: float) -> None:
     geocode_available = True
 
     for prop in properties.values():
-        if not prop.location or (prop.lat and prop.lon) or not geocode_available:
+        if (not prop.location and not prop.city) or (prop.lat and prop.lon) or not geocode_available:
             continue
 
-        lat, lon, source = _try_geocode_location(prop.location, cache)
+        lat, lon, source = _try_geocode_property(prop, cache)
         if lat and lon:
             prop.lat = lat
             prop.lon = lon
