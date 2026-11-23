@@ -1,0 +1,736 @@
+<title>Magyar ingatlanhirdetések ár-becslése</title>
+<style>
+  :root{
+    --surface:#F3F5F2;
+    --surface-raised:#FFFFFF;
+    --surface-sunk:#EAEEE9;
+    --border:#DCE2DC;
+    --ink:#15201B;
+    --ink-2:#48564F;
+    --muted:#8B968F;
+    --accent:#0C8268;
+    --accent-ink:#FFFFFF;
+    --accent-soft:#E2EFE9;
+    --ochre:#A8650A;
+    --ochre-soft:#F3E6D3;
+    --critical:#B0442C;
+    --critical-soft:#F5E2DD;
+    --shadow: 0 1px 2px rgba(20,30,25,0.06), 0 8px 24px -12px rgba(20,30,25,0.18);
+    --radius: 10px;
+    --font-display: 'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Noto Serif',serif;
+    --font-body: Seravek,'Gill Sans Nova',Calibri,'Noto Sans','Segoe UI',Roboto,sans-serif;
+    --font-mono: 'SF Mono','Cascadia Mono','Roboto Mono','Noto Sans Mono',ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --surface:#121715;
+      --surface-raised:#1B211D;
+      --surface-sunk:#0D1110;
+      --border:#2A322C;
+      --ink:#ECEFEA;
+      --ink-2:#AEBAB2;
+      --muted:#6E7A72;
+      --accent:#1E9C80;
+      --accent-ink:#06120E;
+      --accent-soft:#17352C;
+      --ochre:#BE8A2A;
+      --ochre-soft:#332A15;
+      --critical:#D97A61;
+      --critical-soft:#3A2420;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 28px -12px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --surface:#121715; --surface-raised:#1B211D; --surface-sunk:#0D1110;
+    --border:#2A322C; --ink:#ECEFEA; --ink-2:#AEBAB2; --muted:#6E7A72;
+    --accent:#1E9C80; --accent-ink:#06120E; --accent-soft:#17352C;
+    --ochre:#BE8A2A; --ochre-soft:#332A15; --critical:#D97A61; --critical-soft:#3A2420;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 28px -12px rgba(0,0,0,0.6);
+  }
+  :root[data-theme="light"]{
+    --surface:#F3F5F2; --surface-raised:#FFFFFF; --surface-sunk:#EAEEE9;
+    --border:#DCE2DC; --ink:#15201B; --ink-2:#48564F; --muted:#8B968F;
+    --accent:#0C8268; --accent-ink:#FFFFFF; --accent-soft:#E2EFE9;
+    --ochre:#A8650A; --ochre-soft:#F3E6D3; --critical:#B0442C; --critical-soft:#F5E2DD;
+    --shadow: 0 1px 2px rgba(20,30,25,0.06), 0 8px 24px -12px rgba(20,30,25,0.18);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--surface);
+    color:var(--ink);
+    font-family:var(--font-body);
+    overflow-x:hidden;
+  }
+  .deck{
+    height:100dvh;
+    overflow-y:scroll;
+    scroll-snap-type:y mandatory;
+    scroll-behavior:smooth;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .deck{scroll-behavior:auto;}
+  }
+  .slide{
+    min-height:100dvh;
+    scroll-snap-align:start;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding:min(7vh,56px) min(9vw,88px);
+    position:relative;
+    border-bottom:1px solid var(--border);
+  }
+  .slide-inner{
+    max-width:1040px;
+    width:100%;
+    margin:0 auto;
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    letter-spacing:.11em;
+    text-transform:uppercase;
+    color:var(--accent);
+    font-weight:600;
+    margin:0 0 14px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:18px;height:2px;
+    background:var(--accent);
+    display:inline-block;
+  }
+  h1,h2{
+    font-family:var(--font-display);
+    font-weight:600;
+    line-height:1.08;
+    text-wrap:balance;
+    margin:0 0 18px;
+    color:var(--ink);
+  }
+  h1{font-size:clamp(34px,5vw,58px);}
+  h2{font-size:clamp(26px,3.6vw,38px);}
+  p.lede{
+    font-size:clamp(16px,1.9vw,20px);
+    color:var(--ink-2);
+    max-width:640px;
+    line-height:1.55;
+    margin:0 0 8px;
+  }
+  .meta-row{
+    margin-top:36px;
+    display:flex;
+    gap:28px;
+    flex-wrap:wrap;
+    font-size:14px;
+    color:var(--muted);
+  }
+  .meta-row b{color:var(--ink-2);font-weight:600;}
+
+  ul.points{
+    list-style:none;
+    margin:22px 0 0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    max-width:700px;
+  }
+  ul.points li{
+    position:relative;
+    padding-left:26px;
+    font-size:17px;
+    line-height:1.5;
+    color:var(--ink-2);
+  }
+  ul.points li::before{
+    content:"";
+    position:absolute;left:0;top:8px;
+    width:7px;height:7px;border-radius:2px;
+    background:var(--accent);
+  }
+  ul.points strong{color:var(--ink);font-weight:650;}
+  ul.points li.warn::before{background:var(--critical);}
+
+  .talk{
+    margin-top:28px;
+    padding:14px 18px;
+    background:var(--surface-sunk);
+    border-left:3px solid var(--ochre);
+    border-radius:6px;
+    font-size:14.5px;
+    color:var(--ink-2);
+    max-width:720px;
+  }
+  .talk b{color:var(--ink);font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px;color:var(--ochre);}
+
+  .grid2{
+    display:grid;
+    grid-template-columns:1.1fr 1fr;
+    gap:40px;
+    align-items:start;
+    margin-top:8px;
+  }
+  @media (max-width:860px){ .grid2{grid-template-columns:1fr;} }
+
+  /* flow diagram */
+  .flow{
+    display:flex;
+    align-items:center;
+    gap:0;
+    margin:28px 0 8px;
+    flex-wrap:wrap;
+  }
+  .flow-step{
+    background:var(--surface-raised);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:12px 16px;
+    font-size:13.5px;
+    font-weight:600;
+    color:var(--ink);
+    box-shadow:var(--shadow);
+    white-space:nowrap;
+  }
+  .flow-step span{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:2px;}
+  .flow-arrow{
+    color:var(--accent);
+    font-size:18px;
+    padding:0 10px;
+  }
+
+  /* stat tiles */
+  .stats{display:flex;gap:16px;flex-wrap:wrap;margin-top:22px;}
+  .stat-tile{
+    background:var(--surface-raised);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 20px;
+    min-width:150px;
+    box-shadow:var(--shadow);
+  }
+  .stat-tile .num{
+    font-family:var(--font-mono);
+    font-variant-numeric:tabular-nums;
+    font-size:28px;
+    font-weight:700;
+    color:var(--accent);
+    line-height:1;
+  }
+  .stat-tile .cap{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-top:6px;
+    line-height:1.35;
+  }
+  .stat-tile.ochre .num{color:var(--ochre);}
+  .stat-tile.critical .num{color:var(--critical);}
+
+  /* callout cards */
+  .callouts{display:flex;gap:16px;flex-wrap:wrap;margin-top:24px;}
+  .callout{
+    flex:0 1 280px;
+    background:var(--critical-soft);
+    border:1px solid color-mix(in srgb, var(--critical) 35%, var(--border));
+    border-radius:var(--radius);
+    padding:16px 18px;
+  }
+  .callout .tag{
+    font-family:var(--font-mono);
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--critical);font-weight:700;margin-bottom:8px;display:block;
+  }
+  .callout p{margin:0;font-size:14.5px;color:var(--ink-2);line-height:1.45;}
+  .callout b{color:var(--ink);}
+
+  /* charts: vertical bars */
+  .chart{margin-top:26px;}
+  .chart-title{font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:var(--font-mono);margin-bottom:14px;}
+  .vbars{
+    display:flex;
+    align-items:flex-end;
+    gap:22px;
+    height:200px;
+    padding-bottom:4px;
+    border-bottom:1px solid var(--border);
+  }
+  .vbar{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-end;
+    height:100%;
+    width:64px;
+    flex:0 0 auto;
+    position:relative;
+  }
+  .vbar .value{
+    font-family:var(--font-mono);
+    font-variant-numeric:tabular-nums;
+    font-size:13px;
+    font-weight:700;
+    color:var(--ink);
+    margin-bottom:6px;
+    white-space:nowrap;
+  }
+  .vbar .fill{
+    width:100%;
+    background:var(--muted);
+    border-radius:4px 4px 2px 2px;
+    transition:height .3s ease;
+  }
+  .vbar.hi .fill{background:var(--accent);}
+  .vbar.hi .value{color:var(--accent);}
+  .vbar .lbl{
+    margin-top:10px;
+    font-size:12px;
+    color:var(--ink-2);
+    text-align:center;
+    line-height:1.3;
+  }
+  .vbar .lbl small{display:block;color:var(--muted);font-size:10.5px;}
+  .vbar.break .fill{
+    background:repeating-linear-gradient(135deg, var(--critical) 0 6px, color-mix(in srgb, var(--critical) 70%, transparent) 6px 12px);
+  }
+  .vbar.break .value{color:var(--critical);}
+  .vbar.break .lbl::after{
+    content:"töréspont";
+    display:block;
+    font-size:10px;
+    color:var(--critical);
+    font-family:var(--font-mono);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    margin-top:2px;
+  }
+  .chart-note{margin-top:10px;font-size:12.5px;color:var(--muted);max-width:560px;}
+
+  /* horizontal bars (feature importance) */
+  .hbars{display:flex;flex-direction:column;gap:11px;margin-top:22px;max-width:620px;}
+  .hbar-row{display:grid;grid-template-columns:132px 1fr 56px;align-items:center;gap:12px;}
+  .hbar-row .name{font-size:13px;font-family:var(--font-mono);color:var(--ink-2);text-align:right;}
+  .hbar-track{height:14px;background:var(--surface-sunk);border-radius:4px;overflow:hidden;}
+  .hbar-fill{height:100%;background:var(--accent);border-radius:4px;}
+  .hbar-row .val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--ink);}
+  .hbar-row.top .name,.hbar-row.top .val{color:var(--accent);font-weight:700;}
+
+  /* grouped small-multiple pairs */
+  .multiples{display:flex;gap:48px;flex-wrap:wrap;margin-top:24px;}
+  .multiple{flex:1 1 220px;}
+
+  /* legend */
+  .legend{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap;}
+  .legend-item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2);}
+  .legend-dot{width:10px;height:10px;border-radius:3px;}
+
+  /* proportion bar */
+  .propbar{height:22px;border-radius:6px;overflow:hidden;display:flex;background:var(--surface-sunk);max-width:560px;margin-top:14px;border:1px solid var(--border);}
+  .propbar .seg{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent-ink);font-family:var(--font-mono);}
+  .propbar .seg.jofogas{background:var(--ochre);}
+  .propbar .seg.rest{background:var(--muted);color:var(--surface-raised);}
+
+  /* model cards */
+  .cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px;}
+  @media (max-width:860px){.cards3{grid-template-columns:1fr;}}
+  .mcard{background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
+  .mcard h3{margin:0 0 8px;font-family:var(--font-display);font-size:18px;}
+  .mcard p{margin:0;font-size:13px;color:var(--ink-2);line-height:1.5;}
+  .mcard.hi{border-color:var(--accent);background:var(--accent-soft);}
+
+  .steps4{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;}
+  .step4{
+    flex:1 1 180px;
+    background:var(--surface-raised);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    box-shadow:var(--shadow);
+  }
+  .step4 .n{font-family:var(--font-mono);color:var(--accent);font-weight:700;font-size:13px;}
+  .step4 h4{margin:6px 0 4px;font-size:14.5px;font-family:var(--font-body);}
+  .step4 p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.4;}
+  .step4.hi{border-color:var(--accent);}
+
+  blockquote.closing{
+    font-family:var(--font-display);
+    font-size:clamp(20px,2.6vw,26px);
+    line-height:1.5;
+    color:var(--ink);
+    border-left:3px solid var(--accent);
+    padding-left:22px;
+    margin:28px 0 0;
+    max-width:720px;
+  }
+
+  table.plain{border-collapse:collapse;margin-top:18px;font-size:13.5px;}
+  table.plain th,table.plain td{padding:7px 14px;text-align:left;border-bottom:1px solid var(--border);}
+  table.plain th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;}
+  table.plain td{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-2);}
+
+  /* nav */
+  .nav{
+    position:fixed;
+    right:18px;
+    top:50%;
+    transform:translateY(-50%);
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    z-index:20;
+  }
+  .nav button{
+    width:9px;height:9px;border-radius:50%;
+    border:1px solid var(--muted);
+    background:transparent;
+    cursor:pointer;
+    padding:0;
+    transition:background .15s, transform .15s;
+  }
+  .nav button:hover{transform:scale(1.25);}
+  .nav button.active{background:var(--accent);border-color:var(--accent);transform:scale(1.3);}
+  .nav button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
+
+  .counter{
+    position:fixed;
+    left:18px;
+    bottom:18px;
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--muted);
+    letter-spacing:.04em;
+    z-index:20;
+    background:var(--surface);
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  .counter b{color:var(--ink);}
+
+  .slideno{
+    position:absolute;
+    top:28px; right:min(9vw,88px);
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--border);
+    font-weight:700;
+  }
+  :root[data-theme="dark"] .slideno, @media (prefers-color-scheme:dark){ .slideno{color:var(--border);} }
+</style>
+
+<div class="deck" id="deck">
+
+  <section class="slide" id="s1">
+    <span class="slideno">01 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Féléves projekt · adattudomány</div>
+      <h1>Magyar ingatlanhirdetések<br>ár-becslése</h1>
+      <p class="lede">Hogyan becsülhető egy ingatlan ára 5 portálról gyűjtött hirdetések alapján&nbsp;— nyers HTML-től a kiértékelt regressziós modellig?</p>
+      <div class="stats">
+        <div class="stat-tile"><div class="num">1&nbsp;526</div><div class="cap">egyedi hirdetés, 5 portálról</div></div>
+        <div class="stat-tile ochre"><div class="num">0,78</div><div class="cap">teszt R² a végső modellen</div></div>
+        <div class="stat-tile"><div class="num">22,2%</div><div class="cap">teszt MAPE a végső modellen</div></div>
+      </div>
+      <div class="meta-row"><span><b>Molitor István</b></span><span>2026. november 23.</span></div>
+    </div>
+  </section>
+
+  <section class="slide" id="s2">
+    <span class="slideno">02 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Probléma és motiváció</div>
+      <h2>Van ár, csak nincs egy közös adatkészlet</h2>
+      <ul class="points">
+        <li>Az ingatlanárak nyilvánosak, de <strong>szétszórtan, portálonként eltérő formátumban és terminológiával</strong> jelennek meg — nincs egységes, tanításra alkalmas adatkészlet.</li>
+        <li>Cél: <strong>regressziós modell</strong>, amely terület, szobaszám, típus és földrajzi elhelyezkedés alapján becsüli a hirdetett árat.</li>
+        <li>Keretezés: ez egy <strong>teljes end-to-end pipeline</strong> is — gyűjtés → egységesítés → geokódolás → modellezés — nem csak egy "van egy CSV, futtassunk rá sklearn-t" feladat.</li>
+      </ul>
+      <div class="talk"><b>Beszélőpont</b>Az adat időközben háromszorozódott (477 → 1615 nyers sor) — a notebookok ezt a bővülést robusztusan kezelik.</div>
+    </div>
+  </section>
+
+  <section class="slide" id="s3">
+    <span class="slideno">03 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Adatgyűjtési pipeline</div>
+      <h2>5 portál, 2 lépés, 1 közös séma</h2>
+      <div class="flow">
+        <div class="flow-step">seed<span>keresőoldal linkek</span></div><div class="flow-arrow">→</div>
+        <div class="flow-step">fetch<span>HTML / API letöltés</span></div><div class="flow-arrow">→</div>
+        <div class="flow-step">parse<span>egységes Property DTO</span></div><div class="flow-arrow">→</div>
+        <div class="flow-step">geocode<span>Nominatim + city fallback</span></div><div class="flow-arrow">→</div>
+        <div class="flow-step">properties.csv<span>1615 sor</span></div>
+      </div>
+      <div class="grid2" style="margin-top:12px;">
+        <div class="chart">
+          <div class="chart-title">Hirdetések portálonként (nyers, n=1615)</div>
+          <div class="vbars">
+            <div class="vbar hi"><div class="value">1197</div><div class="fill" style="height:100%"></div><div class="lbl">jofogas.hu</div></div>
+            <div class="vbar"><div class="value">166</div><div class="fill" style="height:13.9%"></div><div class="lbl">zenga.hu</div></div>
+            <div class="vbar"><div class="value">141</div><div class="fill" style="height:11.8%"></div><div class="lbl">oc.hu</div></div>
+            <div class="vbar"><div class="value">100</div><div class="fill" style="height:8.4%"></div><div class="lbl">ingatlanbazar.hu</div></div>
+            <div class="vbar"><div class="value">11</div><div class="fill" style="height:2%"></div><div class="lbl">dh.hu</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="stats" style="margin-top:0;">
+            <div class="stat-tile critical"><div class="num">170</div><div class="cap">duplikált sor (ismételten letöltött hirdetés)</div></div>
+            <div class="stat-tile"><div class="num">1 526</div><div class="cap">egyedi hirdetés dedup után</div></div>
+          </div>
+          <p style="font-size:13.5px;color:var(--ink-2);margin-top:16px;line-height:1.5;">Az <b>ingatlan.com</b> Cloudflare bot-védelemmel blokkolja az automatizált kéréseket — ezért nem szerepel a végleges adatkészletben.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="s4">
+    <span class="slideno">04 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Adatkészlet jellemzői és adatminőség</div>
+      <h2>Több adat, kevesebb hiány — de új hibák is</h2>
+      <div class="grid2">
+        <div class="chart" style="margin-top:4px;">
+          <div class="chart-title">Típus szerinti megoszlás (dedup, n=1526)</div>
+          <div class="vbars" style="height:170px;">
+            <div class="vbar hi"><div class="value">698</div><div class="fill" style="height:100%"></div><div class="lbl">lakás</div></div>
+            <div class="vbar hi"><div class="value">678</div><div class="fill" style="height:97%"></div><div class="lbl">ház</div></div>
+            <div class="vbar"><div class="value">80</div><div class="fill" style="height:11.5%"></div><div class="lbl">telek</div></div>
+            <div class="vbar"><div class="value">49</div><div class="fill" style="height:7%"></div><div class="lbl">nyaraló</div></div>
+            <div class="vbar"><div class="value">20</div><div class="fill" style="height:3%"></div><div class="lbl">sorház<small>volt: 1</small></div></div>
+            <div class="vbar"><div class="value">1</div><div class="fill" style="height:1.5%"></div><div class="lbl">beruházás</div></div>
+          </div>
+          <div class="stats" style="margin-top:18px;">
+            <div class="stat-tile"><div class="num">14,5%</div><div class="cap">hiányzó rooms (volt: 30,4%)</div></div>
+            <div class="stat-tile"><div class="num">0%</div><div class="cap">hiányzó koordináta (volt: 3,6%)</div></div>
+          </div>
+        </div>
+        <div class="callouts" style="flex-direction:column;margin-top:4px;">
+          <div class="callout">
+            <span class="tag">Adatminőségi hiba #1</span>
+            <p>Egy <b>oc.hu</b> hirdetésnél (H525602) <code>currency=EUR</code>, miközben az ár nagyságrendje (55 m²-es lakás, "86&nbsp;126&nbsp;910&nbsp;EUR") egyértelműen HUF-ra utal.</p>
+          </div>
+          <div class="callout">
+            <span class="tag">Adatminőségi hiba #2 · új</span>
+            <p>Egy 141 m²-es <b>ház</b> ára <b>82&nbsp;000 HUF</b> (≈580 HUF/m²) — nyilvánvalóan hibás. A kiugró-érték-szűrés fogja meg, de nagy hatása lesz a 7. dián.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="s5">
+    <span class="slideno">05 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Előfeldolgozás</div>
+      <h2>Nyers sorokból modellezhető táblázat</h2>
+      <div class="steps4">
+        <div class="step4"><div class="n">01</div><h4>Duplikátumok eldobása</h4><p>legfrissebb pillanatkép marad, (portal, id) páronként</p></div>
+        <div class="step4"><div class="n">02</div><h4>rooms imputálás</h4><p>típuson belüli medián + <code>rooms_missing</code> flag</p></div>
+        <div class="step4"><div class="n">03</div><h4><code>city</code> → helyszín</h4><p><code>is_budapest</code>, <code>settlement</code>, kerület</p></div>
+        <div class="step4"><div class="n">04</div><h4>Koordináta-jellemző</h4><p><code>dist_to_bp_km</code> (haversine) + <code>has_coords</code></p></div>
+        <div class="step4"><div class="n">05</div><h4>Transzformáció + kódolás</h4><p>log1p, kiugró jelölés, one-hot</p></div>
+      </div>
+      <div class="stats" style="margin-top:26px;">
+        <div class="stat-tile"><div class="num">1 525 × 45</div><div class="cap">properties_preprocessed.csv (sor × oszlop)</div></div>
+      </div>
+      <div class="talk"><b>Beszélőpont</b>Miért nem imputáltunk koordinátát? Egy kitalált koordináta rosszabb, mint a hiány jelzése — ma ez ritkán releváns, a lefedettség majdnem teljes.</div>
+    </div>
+  </section>
+
+  <section class="slide" id="s6">
+    <span class="slideno">06 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Módszertan — modellek és kísérleti terv</div>
+      <h2>3 modell, 4 egymásra épülő kísérlet</h2>
+      <div class="cards3">
+        <div class="mcard"><h3>Lineáris regresszió</h3><p>Egyszerű, interpretálható baseline.</p></div>
+        <div class="mcard"><h3>Ridge</h3><p>Regularizált baseline; α fix, majd hangolt (4. kísérlet).</p></div>
+        <div class="mcard hi"><h3>Random Forest</h3><p>Nemlineáris kapcsolatok; fix, majd <code>RandomizedSearchCV</code>-vel hangolt (4. kísérlet).</p></div>
+      </div>
+      <div class="steps4" style="margin-top:28px;">
+        <div class="step4"><div class="n">1</div><h4>Teljes adathalmaz</h4><p>n=1524, fix hiperparaméterek</p></div>
+        <div class="step4"><div class="n">2</div><h4>Csak ház + lakás</h4><p>n=1375, homogénebb area_sqm</p></div>
+        <div class="step4"><div class="n">3</div><h4>Kiugró értékek nélkül</h4><p>n=1344</p></div>
+        <div class="step4 hi"><div class="n">4</div><h4>RandomizedSearchCV</h4><p>RF + Ridge hangolás, n=1344</p></div>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-top:18px;">80/20 train/test split · 5-fold keresztvalidáció a train részen · <code>StandardScaler</code> a lineáris modelleknél · <code>random_state=42</code></p>
+    </div>
+  </section>
+
+  <section class="slide" id="s7">
+    <span class="slideno">07 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Eredmények</div>
+      <h2>Egy hibás sor többet ronthat, mint a modellválasztás</h2>
+      <div class="multiples">
+        <div class="multiple">
+          <div class="chart-title">Teszt R² (Random Forest, 0–1)</div>
+          <div class="vbars" style="height:150px;">
+            <div class="vbar"><div class="value">0,737</div><div class="fill" style="height:73.7%"></div><div class="lbl">1. Teljes<small>n=1524</small></div></div>
+            <div class="vbar"><div class="value">0,474</div><div class="fill" style="height:47.4%"></div><div class="lbl">2. Ház+lakás<small>n=1375</small></div></div>
+            <div class="vbar hi"><div class="value">0,743</div><div class="fill" style="height:74.3%"></div><div class="lbl">3. Outlier nélkül<small>n=1344</small></div></div>
+          </div>
+        </div>
+        <div class="multiple">
+          <div class="chart-title">Teszt MAPE (Random Forest, tengely max 60%)</div>
+          <div class="vbars" style="height:150px;">
+            <div class="vbar"><div class="value">30,3%</div><div class="fill" style="height:50.5%"></div><div class="lbl">1. Teljes</div></div>
+            <div class="vbar break"><div class="value">458,9%</div><div class="fill" style="height:100%"></div><div class="lbl">2. Ház+lakás</div></div>
+            <div class="vbar hi"><div class="value">26,2%</div><div class="fill" style="height:43.7%"></div><div class="lbl">3. Outlier nélkül</div></div>
+          </div>
+        </div>
+      </div>
+      <p class="chart-note">A 2. kísérlet 458,9%-os MAPE-je <b>egyetlen</b>, 82&nbsp;000 HUF-os hibás teszt-sorból adódik (ld. 4. dia) — a 3. kísérlet kiugró-érték-szűrése ezt megszünteti. Random Forest minden kísérletben jobb, mint a lineáris/Ridge.</p>
+    </div>
+  </section>
+
+  <section class="slide" id="s8">
+    <span class="slideno">08 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Hiperparaméter-keresés</div>
+      <h2><code>RandomizedSearchCV</code> — ingyen javulás a bővült adaton</h2>
+      <div class="multiples">
+        <div class="multiple">
+          <div class="chart-title">Teszt R² — Random Forest</div>
+          <div class="vbars" style="height:150px;">
+            <div class="vbar"><div class="value">0,743</div><div class="fill" style="height:74.3%"></div><div class="lbl">fix<small>300 fa, mélység 6</small></div></div>
+            <div class="vbar hi"><div class="value">0,778</div><div class="fill" style="height:77.8%"></div><div class="lbl">hangolt<small>RandomizedSearchCV</small></div></div>
+          </div>
+        </div>
+        <div class="multiple">
+          <div class="chart-title">Teszt MAPE — Random Forest</div>
+          <div class="vbars" style="height:150px;">
+            <div class="vbar"><div class="value">26,2%</div><div class="fill" style="height:87.3%"></div><div class="lbl">fix</div></div>
+            <div class="vbar hi"><div class="value">22,2%</div><div class="fill" style="height:74%"></div><div class="lbl">hangolt</div></div>
+          </div>
+        </div>
+      </div>
+      <table class="plain">
+        <tr><th>Paraméter</th><th>Talált érték</th></tr>
+        <tr><td>n_estimators</td><td>≈ 559</td></tr>
+        <tr><td>max_depth</td><td>≈ 14</td></tr>
+        <tr><td>min_samples_leaf</td><td>2</td></tr>
+        <tr><td>max_features</td><td>≈ 0,96</td></tr>
+      </table>
+      <div class="talk"><b>Beszélőpont</b>A Ridge α-ja a keresztvalidáción javult, a teszthalmazon alig — a lineáris modell korlátja nem a regularizáció erőssége, hanem a linearitás feltételezése.</div>
+    </div>
+  </section>
+
+  <section class="slide" id="s9">
+    <span class="slideno">09 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Mi mozgatja a predikciót?</div>
+      <h2>Méret + helyszín dominál</h2>
+      <div class="grid2">
+        <div class="hbars">
+          <div class="hbar-row top"><span class="name">dist_to_bp_km</span><div class="hbar-track"><div class="hbar-fill" style="width:100%"></div></div><span class="val">0,657</span></div>
+          <div class="hbar-row top"><span class="name">log_area_sqm</span><div class="hbar-track"><div class="hbar-fill" style="width:35.9%"></div></div><span class="val">0,236</span></div>
+          <div class="hbar-row"><span class="name">rooms</span><div class="hbar-track"><div class="hbar-fill" style="width:9.3%"></div></div><span class="val">0,061</span></div>
+          <div class="hbar-row"><span class="name">type_lakas</span><div class="hbar-track"><div class="hbar-fill" style="width:3.7%"></div></div><span class="val">0,024</span></div>
+          <div class="hbar-row"><span class="name">is_budapest</span><div class="hbar-track"><div class="hbar-fill" style="width:2%"></div></div><span class="val">0,013</span></div>
+          <div class="hbar-row"><span class="name">rooms_missing</span><div class="hbar-track"><div class="hbar-fill" style="width:1.5%"></div></div><span class="val">0,010</span></div>
+          <div class="hbar-row"><span class="name">has_coords</span><div class="hbar-track"><div class="hbar-fill" style="width:0.5%"></div></div><span class="val">≈0,00</span></div>
+        </div>
+        <div>
+          <p style="font-size:14.5px;color:var(--ink-2);line-height:1.6;">A folytonos <b>Budapest-távolság</b> jóval informatívabb, mint a bináris <code>is_budapest</code> — a kerületek és az agglomeráció közötti finomabb árkülönbséget csak a folytonos távolság fejezi ki.</p>
+          <div class="callout" style="margin-top:16px;background:var(--ochre-soft);border-color:color-mix(in srgb, var(--ochre) 35%, var(--border));">
+            <span class="tag" style="color:var(--ochre);">Hibaanalízis</span>
+            <p>A legnagyobb hibák <b>150–270 millió HUF</b> ingatlanoknál jelentkeznek, a modell jellemzően <b>alulbecsül</b> — a prémium szegmensben a presztízs/felújítottság nem része az adatnak.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="s10">
+    <span class="slideno">10 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Korlátok</div>
+      <h2>Új korlát a bővült adaton: mintavételi torzítás</h2>
+      <div class="propbar">
+        <div class="seg jofogas" style="width:72.6%">jofogas.hu — 72,6%</div>
+        <div class="seg rest" style="width:27.4%">4 másik portál</div>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-top:8px;">...ezen belül Debrecen ≈28%, Dunaújváros ≈7% — a budapesti arány 32,4%-ról 13,3%-ra csökkent.</p>
+      <ul class="points" style="margin-top:22px;">
+        <li class="warn"><strong>Portál/település-torzítás</strong> — a seed-lista szerinti torzítás ronthatja az általánosíthatóságot más régiókra.</li>
+        <li><strong>Hiányzó jellemzők</strong> — <code>condition</code> (állapot), emeletszám, energetikai besorolás, kilátás nincs a modellben.</li>
+        <li><strong>Helyszín-reprezentáció egyszerűsége</strong> — <code>dist_to_bp_km</code> csak a Budapest-közelséget fejezi ki.</li>
+        <li><strong>Típus-korlát</strong> — a modell csak ház+lakás hirdetésekre érvényes, telekre/nyaralóra nem.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="slide" id="s11">
+    <span class="slideno">11 / 11</span>
+    <div class="slide-inner">
+      <div class="eyebrow">Következő lépések és összefoglalás</div>
+      <h2>Adat- és algoritmus-kérdés egyszerre</h2>
+      <ul class="points">
+        <li>Rétegzettebb, kiegyensúlyozottabb adatgyűjtés a portál/település-torzítás csökkentésére.</li>
+        <li><code>condition</code> és településszintű ár-jellemző (target encoding) bevonása.</li>
+        <li>Szisztematikusabb adatminőség-ellenőrzés — nem csak percentilis-alapú kiugró-érték-jelölés.</li>
+        <li>Gradiens boosting (XGBoost/LightGBM) — a <code>RandomizedSearchCV</code>-s keret újrahasználható.</li>
+        <li>Reziduum-alapú anomália-detektálás (alul-/túlárazott hirdetések).</li>
+      </ul>
+      <blockquote class="closing">Működő, reprodukálható end-to-end pipeline áll rendelkezésre; a hiperparaméter-hangolás önmagában is érdemben javított, de a mintavétel egyenletessége és a hiányzó jellemzők legalább annyira korlátozzák a pontosságot, mint az algoritmusválasztás.</blockquote>
+    </div>
+  </section>
+
+</div>
+
+<nav class="nav" id="nav" aria-label="Diák navigálása"></nav>
+<div class="counter" id="counter"><b>01</b> / 11</div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var nav = document.getElementById('nav');
+  var counter = document.getElementById('counter');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  slides.forEach(function(s, i){
+    var b = document.createElement('button');
+    b.setAttribute('aria-label', 'Dia ' + (i+1));
+    b.addEventListener('click', function(){
+      s.scrollIntoView({behavior: reduced ? 'auto' : 'smooth', block:'start'});
+    });
+    nav.appendChild(b);
+  });
+  var dots = Array.prototype.slice.call(nav.children);
+
+  var current = 0;
+  function setActive(i){
+    if(i === current) return;
+    current = i;
+    dots.forEach(function(d, j){ d.classList.toggle('active', j===i); });
+    counter.innerHTML = '<b>' + String(i+1).padStart(2,'0') + '</b> / ' + slides.length;
+  }
+  setActive(0);
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting && e.intersectionRatio > 0.55){
+        setActive(slides.indexOf(e.target));
+      }
+    });
+  }, {root: deck, threshold: [0.55]});
+  slides.forEach(function(s){ io.observe(s); });
+
+  window.addEventListener('keydown', function(ev){
+    if(['ArrowDown','ArrowRight','PageDown',' '].indexOf(ev.key) > -1){
+      ev.preventDefault();
+      var next = slides[Math.min(current+1, slides.length-1)];
+      next.scrollIntoView({behavior: reduced ? 'auto':'smooth', block:'start'});
+    } else if(['ArrowUp','ArrowLeft','PageUp'].indexOf(ev.key) > -1){
+      ev.preventDefault();
+      var prev = slides[Math.max(current-1, 0)];
+      prev.scrollIntoView({behavior: reduced ? 'auto':'smooth', block:'start'});
+    }
+  });
+})();
+</script>
